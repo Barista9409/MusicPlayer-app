@@ -1191,6 +1191,7 @@ class NowPlayingActivity : AppCompatActivity(), Player.Listener {
             alpha = if (lyricsShown) 0.15f else 1f
         }
         art.visibility = if (show) View.INVISIBLE else View.VISIBLE
+        applyArtBoxWidth(show)
         // この動画の最初のコマが出るまではジャケットで隠す
         val ready = renderedFor != null && renderedFor == item
         if (show && !ready && coverSince == 0L) {
@@ -1207,6 +1208,19 @@ class NowPlayingActivity : AppCompatActivity(), Player.Listener {
         if (show != videoShown) { videoShown = show; applyOrientationPolicy() }
         applyFullscreen()
         updateLoading()
+    }
+
+    /**
+     * 動画を映す時は、左右の余白をなくして画面の横幅いっぱいに(YouTube Music と同じ大きさ。高さは動画の比率に合わせて
+     * 上下の真ん中に置く。縦長などで入らない時は入る大きさに)。ジャケットの時は今までどおり左右に余白
+     */
+    private fun applyArtBoxWidth(video: Boolean) {
+        val box = findViewById<View>(R.id.npArtBox) ?: return
+        val lp = box.layoutParams as? android.view.ViewGroup.MarginLayoutParams ?: return
+        val m = if (video) 0 else (32 * resources.displayMetrics.density).toInt()
+        if (lp.marginStart == m && lp.marginEnd == m) return
+        lp.marginStart = m; lp.marginEnd = m
+        box.layoutParams = lp
     }
 
     /** 動画の URL を取得中 */

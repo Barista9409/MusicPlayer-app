@@ -75,8 +75,9 @@
         android:textColor="?attr/colorOnSurfaceVariant"
         android:visibility="gone" />
 
-    <!-- ジャケット / 歌詞(切り替え) -->
+    <!-- ジャケット / 歌詞(切り替え)。動画を映す時は左右の余白をなくして画面の横幅いっぱいに(コードで切り替え) -->
     <FrameLayout
+        android:id="@+id/npArtBox"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_marginHorizontal="32dp"
