@@ -64,7 +64,13 @@ object DownloadManager {
             // 準備はすぐ。更新の確認は少し後で(起動直後の再生と通信・処理を取り合わないように)
             if (ensureReady()) {
                 kotlinx.coroutines.delay(90_000)
+                lastEngineCheck = System.currentTimeMillis()
                 updateEngineNow(manual = false)
+                // 開きっぱなしでも、1 日に 1 回は新しい版が無いか見る(YouTube の変化に追いつくため)
+                while (true) {
+                    kotlinx.coroutines.delay(ENGINE_CHECK_EVERY_MS)
+                    updateEngineIfStale(ENGINE_CHECK_EVERY_MS)
+                }
             }
         }
     }
@@ -110,6 +116,22 @@ object DownloadManager {
             _engineStatus.value.contains("失敗") -> "確認できませんでした($after)"
             else -> "最新です($after)"
         }
+    }
+
+    private const val ENGINE_CHECK_EVERY_MS = 24 * 3600_000L
+    @Volatile private var lastEngineCheck = 0L
+
+    /**
+     * 前に確かめてから minGapMs 以上たっていれば、裏で yt-dlp の新しい版を確かめる(あれば更新)。
+     * 速い取り方が YouTube に断られた時(YouTube 側が変わった合図)にも呼ぶ。ダウンロード中は見送る
+     */
+    fun updateEngineIfStale(minGapMs: Long = 6 * 3600_000L) {
+        if (!::app.isInitialized || updating) return
+        if (_jobs.value.any { it.status == JobStatus.RUNNING }) return
+        val now = System.currentTimeMillis()
+        if (now - lastEngineCheck < minGapMs) return
+        lastEngineCheck = now
+        scope.launch { if (ensureReady()) updateEngineNow(manual = false) }
     }
 
     /** 今の版(表示用) */

@@ -342,6 +342,8 @@ object InnerTube {
         if (why != null) {
             brokenClients[sc.key] = System.currentTimeMillis() // はっきり断られた時だけ、しばらくこの方法は使わない
             ErrorLog.add("近道", "速い方法「${sc.key}」が断られた($why)。10 分ほど別の方法で取ります")
+            // YouTube 側が変わった合図なので、yt-dlp に新しい版が出ていないか確かめる(6 時間に 1 回まで)
+            runCatching { DownloadManager.updateEngineIfStale() }
             throw IllegalStateException("${sc.key}: $why")
         }
         lastClient = sc.key
@@ -364,8 +366,6 @@ object InnerTube {
         val mid = probeCode(url, ua, len / 2)
         return if (mid == 403) "先頭 $head / 中ほど 403" else null
     }
-
-    private fun probe(url: String, ua: String): Boolean = probeProblem(url, ua) == null
 
     private fun codeText(c: Int) = if (c < 0) "つながらない" else c.toString()
 
@@ -428,9 +428,18 @@ object InnerTube {
                     (0 until f.length()).mapNotNull { f.optJSONObject(it) }
                         .filter { it.optString("url").isNotBlank() }.maxByOrNull { it.optInt("height") }?.optString("url")
                 }
-                val videoOk = video != null && audio != null && probe(video.getString("url"), sc.userAgent)
-                if (!videoOk && (prog == null || !probe(prog, sc.userAgent))) {
-                    throw IllegalStateException("${sc.key}: 動画サーバーが 403")
+                // 映像だけでなく音声も、途中で断られないか確かめる(映像は読めても音声で 403 になり止まることがあるため)
+                val vWhy = if (video != null && audio != null) probeProblem(video.getString("url"), sc.userAgent)
+                    ?: probeProblem(audio, sc.userAgent) else "映像なし"
+                val videoOk = vWhy == null || vWhy == PROBE_NO_CONNECTION
+                val pWhy = if (videoOk || prog == null) null else probeProblem(prog, sc.userAgent)
+                if (!videoOk && (prog == null || (pWhy != null && pWhy != PROBE_NO_CONNECTION))) {
+                    // はっきり断られた方法は、音声と同じく 10 分は使わない(次の曲で、むだに試して待たないように)
+                    if (vWhy != "映像なし" && vWhy?.startsWith("先頭 つながらない") == false) {
+                        brokenClients[sc.key] = System.currentTimeMillis()
+                        runCatching { DownloadManager.updateEngineIfStale() }
+                    }
+                    throw IllegalStateException("${sc.key}: 動画サーバーが断った($vWhy)")
                 }
                 lastClient = sc.key
                 return if (videoOk) VideoSources(video!!.getString("url"), audio, prog, "${video.optInt("height")}p")

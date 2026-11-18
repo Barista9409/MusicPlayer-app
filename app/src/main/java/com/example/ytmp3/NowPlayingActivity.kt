@@ -1204,7 +1204,8 @@ class NowPlayingActivity : AppCompatActivity(), Player.Listener {
         frameShown = show && ready
         findViewById<View>(R.id.npVideoCover).visibility = if (show && !ready) View.VISIBLE else View.GONE
         // 動画を映している間に、次の曲も先に動画にしておく(曲の切り替わりでジャケットに戻らないように)
-        if (show && ready) prefetchNextVideo()
+        // (最初のコマを待たず、今の曲の URL が取れた時点で始める。遅い方法だと 15 秒ほどかかるため)
+        if (show && (ready || !fetchingVideo)) prefetchNextVideo()
         if (show != videoShown) { videoShown = show; applyOrientationPolicy() }
         applyFullscreen()
         updateLoading()
