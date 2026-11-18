@@ -1218,7 +1218,9 @@ class NowPlayingActivity : AppCompatActivity(), Player.Listener {
         val box = findViewById<View>(R.id.npArtBox) ?: return
         val lp = box.layoutParams as? android.view.ViewGroup.MarginLayoutParams ?: return
         val m = if (video) 0 else (32 * resources.displayMetrics.density).toInt()
-        if (lp.marginStart == m && lp.marginEnd == m) return
+        if (lp.leftMargin == m && lp.rightMargin == m) return
+        // 左右の余白を直接変える(このアプリは右から左の言語に対応していないので、始まり側・終わり側の指定は使われない)
+        lp.setMargins(m, lp.topMargin, m, lp.bottomMargin)
         lp.marginStart = m; lp.marginEnd = m
         box.layoutParams = lp
     }
