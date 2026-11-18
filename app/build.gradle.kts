@@ -1,5 +1,8 @@
 import java.util.Properties
 
+// NewPipe Extractor の版(毎日の自動チェックで新しい版が出たら、ここが書き換わる)
+val newpipeVersion = "v0.27.1"
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -19,11 +22,17 @@ android {
         applicationId = "com.example.ytmp3"
         minSdk = 29
         targetSdk = 34
-        versionCode = 328
-        versionName = "10.57.5"
+        versionCode = 329
+        versionName = "10.57.6"
         ndk {
             abiFilters += listOf("arm64-v8a", "armeabi-v7a")
         }
+        // 設定に版を出す
+        buildConfigField("String", "NEWPIPE_VERSION", "\"${newpipeVersion.removePrefix("v")}\"")
+    }
+
+    buildFeatures {
+        buildConfig = true
     }
 
     signingConfigs {
@@ -52,6 +61,8 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        // NewPipe Extractor は新しい Java の部品を使うので、古い Android でも動くように補う
+        isCoreLibraryDesugaringEnabled = true
     }
     kotlinOptions {
         jvmTarget = "17"
@@ -62,6 +73,9 @@ android {
         jniLibs {
             useLegacyPackaging = true
         }
+        resources {
+            excludes += listOf("META-INF/DEPENDENCIES", "META-INF/INDEX.LIST")
+        }
     }
 }
 
@@ -69,6 +83,10 @@ dependencies {
     val ytdlVersion = "0.18.1"
     implementation("io.github.junkfood02.youtubedl-android:library:$ytdlVersion")
     implementation("io.github.junkfood02.youtubedl-android:ffmpeg:$ytdlVersion")
+
+    // 2 つ目の取り方(yt-dlp と別のチームが作っている。速い)
+    implementation("com.github.teamnewpipe:NewPipeExtractor:$newpipeVersion")
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs_nio:2.0.4")
 
     val media3 = "1.4.1"
     implementation("androidx.media3:media3-exoplayer:$media3")

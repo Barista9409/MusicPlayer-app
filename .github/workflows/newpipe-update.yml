@@ -1,0 +1,53 @@
+name: NewPipe update check
+
+# NewPipe Extractor(2 つ目の取り方)はアプリに組み込む部品なので、アプリの中では更新できない。
+# 毎日 1 回、新しい版が出ていないか確かめ、出ていれば版を上げた開発版を作って公開する
+# (アプリの更新のお知らせから入れると、NewPipe も新しくなる)
+on:
+  schedule:
+    - cron: "17 18 * * *" # 日本時間 3:17
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  check:
+    if: github.repository == 'Barista9409/MusicPlayer-app'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Check latest NewPipe Extractor
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          f=app/build.gradle.kts
+          latest=$(gh api repos/TeamNewPipe/NewPipeExtractor/releases/latest --jq .tag_name)
+          current=$(sed -nE 's/^val newpipeVersion = "(.*)"/\1/p' "$f")
+          echo "最新: $latest / 今: $current"
+          if [ -z "$latest" ] || [ -z "$current" ] || [ "$latest" = "$current" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          code=$(sed -nE 's/^ *versionCode = ([0-9]+)$/\1/p' "$f")
+          name=$(sed -nE 's/^ *versionName = "(.*)"$/\1/p' "$f")
+          IFS=. read -r a b c <<< "$name"
+          newcode=$((code + 1)); newname="$a.$b.$((c + 1))"
+          sed -i -E "s/^val newpipeVersion = \".*\"/val newpipeVersion = \"$latest\"/; s/versionCode = $code\$/versionCode = $newcode/; s/versionName = \"$name\"/versionName = \"$newname\"/" "$f"
+          { printf '## %s\n- 🔧 2 つ目の取り方(NewPipe)を新しい版(%s)にしました\n\n' "$newname" "${latest#v}"; cat app/src/main/assets/changelog.txt; } > "$RUNNER_TEMP/cl"
+          mv "$RUNNER_TEMP/cl" app/src/main/assets/changelog.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "NewPipe を $latest に更新(自動)"
+          git push
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      # この仕組みからの送信ではビルドが自動で始まらないので、ここで始める
+      - name: Start build
+        if: steps.check.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run build.yml --ref main

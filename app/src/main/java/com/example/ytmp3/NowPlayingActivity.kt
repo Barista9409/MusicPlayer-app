@@ -1082,7 +1082,7 @@ class NowPlayingActivity : AppCompatActivity(), Player.Listener {
                     val (mv0, sure) = InnerTube.musicVideoLookup(vid)
                     if (sure) VideoCheck.put(vid, mv0)
                     val mv = mv0 ?: throw NoVideo()
-                    Searcher.videoSources("https://www.youtube.com/watch?v=$mv")
+                    Searcher.videoSources("https://www.youtube.com/watch?v=$mv", urgent = current)
                 }
             }
             if (current) { fetchingVideo = false; updateLoading() }

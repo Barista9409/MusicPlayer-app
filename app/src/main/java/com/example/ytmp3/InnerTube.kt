@@ -351,14 +351,14 @@ object InnerTube {
     }
 
     /** 確かめた時に、つながらなかった(断られたのではない) */
-    private val PROBE_NO_CONNECTION = "先頭 つながらない"
+    internal const val PROBE_NO_CONNECTION = "先頭 つながらない"
 
     /**
      * 読めるか試す。問題なければ null、断られたら理由。
      * 最初の 2 バイトに加えて、ファイルの中ほども 2 バイト読む(最初だけ読ませて、その先を断ることがあるため)。
      * 中ほどは「はっきり断られた(403)」時だけだめとする(通信が遅いだけの時に使えなくしないように)
      */
-    private fun probeProblem(url: String, ua: String): String? {
+    internal fun probeProblem(url: String, ua: String): String? {
         val head = probeCode(url, ua, 0)
         if (head !in 200..299) return "先頭 ${codeText(head)}"
         val len = Regex("[?&]clen=(\\d+)").find(url)?.groupValues?.get(1)?.toLongOrNull() ?: return null

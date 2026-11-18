@@ -876,7 +876,7 @@ class MainActivity : AppCompatActivity() {
         val v = packageManager.getPackageInfo(packageName, 0).versionName
         MaterialAlertDialogBuilder(this)
             .setTitle("${getString(R.string.app_name)}")
-            .setMessage("現在: v$v(yt-dlp ${runCatching { DownloadManager.engineVersion() }.getOrDefault("?")})\n\n" +
+            .setMessage("現在: v$v(yt-dlp ${runCatching { DownloadManager.engineVersion() }.getOrDefault("?")} · NewPipe ${NewPipeSource.version})\n\n" +
                 "好きな曲を集めて、いつでもどこでも。\n\n" +
                 "🔎 YouTube・YouTube Music から探して、試聴してから保存\n" +
                 "📻 ラジオ・おすすめの曲・ランキングで新しい曲に出会う\n" +

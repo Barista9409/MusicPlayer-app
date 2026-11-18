@@ -10,6 +10,8 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // NewPipe Extractor(2 つ目の取り方)はここから
+        maven("https://jitpack.io")
     }
 }
 rootProject.name = "YtMp3"

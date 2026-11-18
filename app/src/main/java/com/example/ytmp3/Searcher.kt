@@ -3,6 +3,7 @@ package com.example.ytmp3
 import com.yausername.youtubedl_android.YoutubeDL
 import com.yausername.youtubedl_android.YoutubeDLRequest
 import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.withPermit
 import org.json.JSONObject
@@ -204,7 +205,7 @@ object Searcher {
         }
         val d = streamScope.async {
             val direct = vid !in ytdlpOnly
-            val u = if (priority) fetchStream(url, "stream:$vid", direct)
+            val u = if (priority) fetchStream(url, "stream:$vid", direct, hedge = true)
             else {
                 waitingSlot.add(vid)
                 try {
@@ -300,22 +301,104 @@ object Searcher {
         return fetchStream(videoUrl, "stream-fallback", direct = false)
     }
 
-    private suspend fun fetchStream(videoUrl: String, pid: String, direct: Boolean = true): String {
-        // 近道: 内部 API に直接(0.5 秒前後)
-        val t0 = System.currentTimeMillis()
-        var why = ""
-        if (direct) youtubeVideoId(videoUrl)?.let { vid ->
-            runCatching { InnerTube.audioUrl(vid) }
-                .onSuccess { lastStream = "再生URL ${sec(t0)}(直接: ${InnerTube.lastClient})"; return it }
-                .onFailure { why = short(it); android.util.Log.w("Searcher", "InnerTube player failed", it) }
-            permanentReason(why)?.let { r -> unplayable[vid] = r; lastStream = "再生URL(直接: $r)"; throw Unplayable(r) }
+    // ───────── 取り方を並べて走らせる ─────────
+
+    /** 待たせている時: 速い方法と NewPipe で取れなければ、この時間たったら yt-dlp も走らせる */
+    private const val HEDGE_MS = 2500L
+    /** 前の方法が全部だめになるまで始めない(急がない先読み用) */
+    private const val AFTER_OTHERS = Long.MAX_VALUE
+
+    /** 1 つの取り方。delayMs たつか、前の方法が全部だめになったら始める。stop は取りやめる時(yt-dlp を止める) */
+    private class Attempt<T>(val name: String, val delayMs: Long, val stop: () -> Unit = {}, val run: suspend () -> T)
+
+    /**
+     * いくつかの取り方を(時間をずらして)同時に走らせ、最初に取れたものを使う。残りは取りやめる。
+     * 何度やっても無理な曲(Unplayable)だと分かったら、すぐ終える
+     */
+    private suspend fun <T> race(attempts: List<Attempt<T>>, failures: MutableList<String>): Pair<String, T> {
+        val winner = kotlinx.coroutines.CompletableDeferred<Pair<String, T>>()
+        val failedCount = java.util.concurrent.atomic.AtomicInteger(0)
+        val failed = kotlinx.coroutines.flow.MutableStateFlow(0)
+        val running = java.util.concurrent.ConcurrentHashMap.newKeySet<Int>()
+        val jobs = attempts.mapIndexed { i, a ->
+            streamScope.launch {
+                if (a.delayMs > 0) kotlinx.coroutines.withTimeoutOrNull(a.delayMs) { failed.first { it >= i } }
+                if (winner.isCompleted) return@launch
+                running.add(i)
+                try {
+                    winner.complete(a.name to a.run())
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (e: Unplayable) {
+                    winner.completeExceptionally(e)
+                } catch (e: Exception) {
+                    synchronized(failures) { failures += "${a.name} 失敗: ${short(e)}" }
+                    val n = failedCount.incrementAndGet()
+                    failed.value = n
+                    if (n >= attempts.size) winner.completeExceptionally(e)
+                } finally {
+                    running.remove(i)
+                }
+            }
         }
-        lastStream = if (direct) "再生URL(直接 失敗: $why → yt-dlp)" else "再生URL(yt-dlp)"
+        try {
+            return winner.await()
+        } finally {
+            jobs.forEach { it.cancel() }
+            running.toList().forEach { i -> runCatching { attempts[i].stop() } }
+        }
+    }
+
+    /**
+     * 再生用の URL。速い方法(直接) → NewPipe → yt-dlp。
+     * hedge(今流す曲で待たせている時): 直接と NewPipe を同時に始め、2.5 秒で取れなければ yt-dlp も同時に。
+     * そうでない時(先読み): 順に試す(電池と問い合わせの数を抑える)
+     */
+    private suspend fun fetchStream(videoUrl: String, pid: String, direct: Boolean = true, hedge: Boolean = false): String {
+        val t0 = System.currentTimeMillis()
+        val vid = youtubeVideoId(videoUrl)
+        val ytdlp = Attempt("yt-dlp", if (hedge) HEDGE_MS else AFTER_OTHERS,
+            stop = { runCatching { YoutubeDL.getInstance().destroyProcessById(pid) } }) { ytdlpAudio(videoUrl, pid) }
+        val attempts = if (!direct || vid == null) listOf(ytdlp.copyNow()) else listOf(
+            Attempt("直接", 0L) {
+                try {
+                    InnerTube.audioUrl(vid).also { lastDirect = InnerTube.lastClient }
+                } catch (e: Exception) {
+                    android.util.Log.w("Searcher", "InnerTube player failed", e)
+                    permanentReason(e.message)?.let { throw Unplayable(it) }
+                    throw e
+                }
+            },
+            Attempt("NewPipe", if (hedge) 0L else AFTER_OTHERS) { NewPipeSource.audioUrl(vid) },
+            ytdlp,
+        )
+        val failures = mutableListOf<String>()
+        try {
+            val (how, url) = race(attempts, failures)
+            val name = if (how == "直接") "直接: $lastDirect" else how
+            lastStream = "再生URL ${sec(t0)}($name" + synchronized(failures) { failures.joinToString("") { " · $it" } } + ")"
+            return url
+        } catch (e: Unplayable) {
+            vid?.let { unplayable[it] = e.message ?: RESTRICTED }
+            lastStream = "再生URL(${e.message})"
+            throw e
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            lastStream = "再生URL 失敗 ${sec(t0)}(" + synchronized(failures) { failures.joinToString(" · ") } + ")"
+            throw e
+        }
+    }
+
+    @Volatile private var lastDirect = ""
+
+    private fun <T> Attempt<T>.copyNow() = Attempt(name, 0L, stop, run)
+
+    /** yt-dlp で音声の URL(既定 → tv の順) */
+    private suspend fun ytdlpAudio(videoUrl: String, pid: String): String {
         if (!DownloadManager.ready()) throw IllegalStateException("準備中です")
         var last: Exception? = null
-        // android_vr は上の直接取得で試し済みなので、yt-dlp は既定 → tv の順
-        val attempts = listOf(null, "youtube:player_client=tv")
-        for (args in attempts) {
+        for (args in listOf(null, "youtube:player_client=tv")) {
             try {
                 val req = YoutubeDLRequest(videoUrl).apply {
                     addOption("--no-playlist")
@@ -328,33 +411,48 @@ object Searcher {
                     if (args != null) addOption("--extractor-args", args)
                 }
                 val out = YoutubeDL.getInstance().execute(req, pid).out
-                out.lines().firstOrNull { it.startsWith("http") }?.let {
-                    lastStream += " ${sec(t0)}"
-                    return it.trim()
-                }
+                out.lines().firstOrNull { it.startsWith("http") }?.let { return it.trim() }
             } catch (e: YoutubeDL.CanceledException) {
                 throw e
             } catch (e: Exception) {
                 // Premium 限定などは、別の方法で試しても同じなのですぐ終える
-                permanentReason(e.message)?.let { r ->
-                    youtubeVideoId(videoUrl)?.let { unplayable[it] = r }
-                    throw Unplayable(r)
-                }
+                permanentReason(e.message)?.let { r -> throw Unplayable(r) }
                 last = e
             }
         }
         throw last ?: IllegalStateException("再生できませんでした")
     }
 
-    /** 動画プレビューの URL(720p まで)。近道 → yt-dlp */
-    suspend fun videoSources(videoUrl: String): InnerTube.VideoSources {
+    /**
+     * 動画の URL(720p まで)。直接 → NewPipe → yt-dlp。
+     * urgent(今の曲): 直接と NewPipe を同時に、2.5 秒で取れなければ yt-dlp も。そうでない時(次の曲の先読み): 順に
+     */
+    suspend fun videoSources(videoUrl: String, urgent: Boolean = true): InnerTube.VideoSources {
         val t0 = System.currentTimeMillis()
-        var why = ""
-        youtubeVideoId(videoUrl)?.let { vid ->
-            runCatching { InnerTube.videoSources(vid) }
-                .onSuccess { status.value = "動画 ${sec(t0)}(直接: ${InnerTube.lastClient} · ${it.label})"; return it }
-                .onFailure { why = short(it) }
+        val vid = youtubeVideoId(videoUrl)
+        val pid = "video-" + System.nanoTime()
+        val ytdlp = Attempt("yt-dlp", if (urgent) HEDGE_MS else AFTER_OTHERS,
+            stop = { runCatching { YoutubeDL.getInstance().destroyProcessById(pid) } }) { ytdlpVideo(videoUrl, pid) }
+        val attempts = if (vid == null) listOf(ytdlp.copyNow()) else listOf(
+            Attempt("直接", 0L) { InnerTube.videoSources(vid).also { lastDirect = InnerTube.lastClient } },
+            Attempt("NewPipe", if (urgent) 0L else AFTER_OTHERS) { NewPipeSource.videoSources(vid) },
+            ytdlp,
+        )
+        val failures = mutableListOf<String>()
+        try {
+            val (how, src) = race(attempts, failures)
+            val name = if (how == "直接") "直接: $lastDirect" else how
+            status.value = "動画 ${sec(t0)}($name · ${src.label}" + synchronized(failures) { failures.joinToString("") { " · $it" } } + ")"
+            return src
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            status.value = "動画 失敗 ${sec(t0)}(" + synchronized(failures) { failures.joinToString(" · ") } + ")"
+            throw e
         }
+    }
+
+    private suspend fun ytdlpVideo(videoUrl: String, pid: String): InnerTube.VideoSources {
         if (!DownloadManager.ready()) throw IllegalStateException("準備中です")
         val req = YoutubeDLRequest(videoUrl).apply {
             addOption("--no-playlist")
@@ -363,8 +461,7 @@ object Searcher {
             addOption("--no-warnings")
             DownloadManager.cacheDir()?.let { addOption("--cache-dir", it.absolutePath) }
         }
-        val lines = YoutubeDL.getInstance().execute(req, "video-" + System.nanoTime()).out.lines().filter { it.startsWith("http") }
-        status.value = "動画 ${sec(t0)}(直接 失敗: $why → yt-dlp)"
+        val lines = YoutubeDL.getInstance().execute(req, pid).out.lines().filter { it.startsWith("http") }
         return when {
             lines.size >= 2 -> InnerTube.VideoSources(lines[0].trim(), lines[1].trim(), null, "720p")
             lines.size == 1 -> InnerTube.VideoSources(null, null, lines[0].trim(), "")

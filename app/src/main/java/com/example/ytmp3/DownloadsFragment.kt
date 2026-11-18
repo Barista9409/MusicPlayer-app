@@ -534,7 +534,7 @@ class DownloadsFragment : Fragment(R.layout.fragment_downloads) {
         val channel = "（${AppUpdater.channelLabel(requireContext())}）"
         row(box, R.drawable.ic_refresh, "アプリを更新",
             if (up != null) "アプリをダウンロード中… $up%"
-            else "v${AppUpdater.currentName(requireContext())}$channel\nyt-dlp $ytdlp") {
+            else "v${AppUpdater.currentName(requireContext())}$channel\nyt-dlp $ytdlp · NewPipe ${NewPipeSource.version}") {
             if (AppUpdater.progress.value == null) runUpdate()
         }
         row(box, R.drawable.ic_download, "自動更新設定", UpdateNotifier.modeLabel(requireContext()) +
@@ -669,6 +669,7 @@ class DownloadsFragment : Fragment(R.layout.fragment_downloads) {
             append("【MusicPlayer 問題の報告】\n")
             append("内容: ").append(note.ifBlank { "(書かれていません)" }).append("\n\n")
             append("版: v${AppUpdater.currentName(c)} (${AppUpdater.currentCode(c)}) · 安定版のみ: ${onOff(!AppUpdater.wantsDev(c))}\n")
+            append("取り方: yt-dlp ${runCatching { DownloadManager.engineVersion() }.getOrDefault("?")} · NewPipe ${NewPipeSource.version}\n")
             append("端末: ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL} / Android ${android.os.Build.VERSION.RELEASE}\n")
             append("設定: ラジオ ${onOff(AutoContinue.isGlobalOn(c))} · 音量をそろえる ${onOff(VolumeLeveler.isOn(c))} · " +
                 "イコライザー ${SoundSettings.label(c)} · 曲間フェード ${SoundSettings.fadeSec(c)}秒 · 止まったら次へ ${onOff(AutoSkip.isOn(c))}\n")
