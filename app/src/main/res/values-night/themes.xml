@@ -1,0 +1,36 @@
+<resources>
+    <!-- ダーク: ネイビーの背景に金のアクセント -->
+    <style name="Theme.YtMp3" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/gold</item>
+        <item name="colorOnPrimary">@color/navy</item>
+        <item name="colorPrimaryContainer">#3A3220</item>
+        <item name="colorOnPrimaryContainer">@color/cream</item>
+        <item name="colorSecondary">@color/cream</item>
+        <item name="colorOnSecondary">@color/navy</item>
+        <item name="colorSecondaryContainer">@color/navy_light</item>
+        <item name="colorOnSecondaryContainer">@color/cream</item>
+        <item name="colorTertiary">#8FA3D1</item>
+        <item name="android:colorBackground">@color/navy_deep</item>
+        <item name="colorSurface">@color/navy_deep</item>
+        <item name="colorSurfaceContainer">#16213E</item>
+        <item name="colorSurfaceContainerLow">#121B33</item>
+        <item name="colorSurfaceContainerHigh">#1D2A4C</item>
+        <item name="colorSurfaceContainerHighest">#24335A</item>
+        <item name="colorOnSurface">#ECE6D8</item>
+        <item name="colorOnSurfaceVariant">#BFC4D6</item>
+        <item name="colorOutline">#5B6684</item>
+        <item name="android:statusBarColor">@color/navy_deep</item>
+        <item name="android:navigationBarColor">@color/navy_deep</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+
+    <style name="Theme.YtMp3.NowPlaying">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+    </style>
+
+    <style name="ThemeOverlay.YtMp3.Wheel" parent="">
+        <item name="android:textColorPrimary">?attr/colorOnSurface</item>
+        <item name="colorControlNormal">@android:color/transparent</item>
+    </style>
+</resources>

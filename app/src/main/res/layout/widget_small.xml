@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- YouTube Music のウィジェットと同じ太さ(76dp)。セルの高さが大きくても中央に置く -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+<LinearLayout
+    android:id="@+id/w_root"
+    android:layout_width="match_parent"
+    android:layout_height="76dp"
+    android:layout_gravity="center_vertical"
+    android:background="@drawable/widget_bg"
+    android:clipToOutline="true"
+    android:orientation="horizontal">
+
+    <!-- 左端いっぱいのジャケット -->
+    <ImageView
+        android:id="@+id/w_art"
+        android:layout_width="76dp"
+        android:layout_height="match_parent"
+        android:contentDescription="ジャケット"
+        android:scaleType="centerCrop" />
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:gravity="center_vertical"
+        android:orientation="vertical"
+        android:paddingStart="16dp"
+        android:paddingEnd="8dp">
+
+        <!-- 曲名 – アーティスト(1 行) -->
+        <TextView
+            android:id="@+id/w_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:singleLine="true"
+            android:textColor="#FFFFFFFF"
+            android:textSize="16sp" />
+
+        <TextView
+            android:id="@+id/w_artist"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:visibility="gone" />
+
+        <LinearLayout
+            android:id="@+id/w_text"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:visibility="gone" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="44dp"
+            android:layout_marginTop="2dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <ImageButton
+                android:id="@+id/w_shuffle"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="@android:color/transparent"
+                android:contentDescription="シャッフル"
+                android:scaleType="center"
+                android:src="@drawable/wic_shuffle" />
+
+            <ImageButton
+                android:id="@+id/w_prev"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="@android:color/transparent"
+                android:contentDescription="前の曲"
+                android:scaleType="center"
+                android:src="@drawable/wic_prev" />
+
+            <ImageButton
+                android:id="@+id/w_play"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="@android:color/transparent"
+                android:contentDescription="再生/一時停止"
+                android:scaleType="center"
+                android:src="@drawable/wic_play" />
+
+            <ImageButton
+                android:id="@+id/w_next"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="@android:color/transparent"
+                android:contentDescription="次の曲"
+                android:scaleType="center"
+                android:src="@drawable/wic_next" />
+
+            <ImageButton
+                android:id="@+id/w_repeat"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="@android:color/transparent"
+                android:contentDescription="リピート"
+                android:scaleType="center"
+                android:src="@drawable/wic_repeat" />
+        </LinearLayout>
+    </LinearLayout>
+</LinearLayout>
+</FrameLayout>

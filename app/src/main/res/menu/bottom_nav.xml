@@ -1,0 +1,6 @@
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:id="@+id/nav_library" android:icon="@drawable/ic_home" android:title="ホーム" />
+    <item android:id="@+id/nav_playlists" android:icon="@drawable/ic_queue_music" android:title="プレイリスト" />
+    <item android:id="@+id/nav_search" android:icon="@drawable/ic_search" android:title="検索" />
+    <item android:id="@+id/nav_downloads" android:icon="@drawable/ic_settings" android:title="設定" />
+</menu>

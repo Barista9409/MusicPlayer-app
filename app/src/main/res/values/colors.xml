@@ -1,0 +1,15 @@
+<resources>
+    <!-- 3-C: ネイビー × クリーム × 金 -->
+    <color name="navy">#16213E</color>
+    <color name="navy_deep">#0E1629</color>
+    <color name="navy_light">#2A3A63</color>
+    <color name="cream">#F3E9D2</color>
+    <color name="gold">#E9B44C</color>
+    <color name="gold_dark">#9A6F1E</color>
+
+    <!-- 互換(グラデーション等で使っている名前) -->
+    <color name="brand_start">#2A3A63</color>
+    <color name="brand_mid">#16213E</color>
+    <color name="brand_end">#0E1629</color>
+    <color name="icon_bg">#16213E</color>
+</resources>

@@ -1,0 +1,161 @@
+name: Build APK
+
+on:
+  push:
+  workflow_dispatch:
+
+# ビルドの時間を節約: 開発版は、新しく送ったら前のビルドを止めて最新だけ作る。
+# 安定版(「安定版」で始まる送信)は 1 回ずつ別扱いにして止めない(公開の途中で止まらないように)
+concurrency:
+  group: ${{ startsWith(github.event.head_commit.message, '安定版') && format('stable-{0}', github.run_id) || format('dev-{0}', github.ref) }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # 古いビルドの控え(成果物)を消すため
+      actions: write
+    env:
+      # 公開用リポジトリ(APK だけを置く)に書き込むトークン。未登録なら公開はしない
+      RELEASES_TOKEN: ${{ secrets.RELEASES_TOKEN }}
+      RELEASES_REPO: Barista9409/MusicPlayer-releases
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v5
+
+      # 署名鍵は GitHub の Secrets から取り出す(リポジトリには置かない)。
+      # KEYSTORE_BASE64 = 鍵ファイル(ytmp3.jks)を base64 にした文字列 / STORE_PASSWORD / KEY_ALIAS / KEY_PASSWORD
+      - name: Prepare signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            mkdir -p keystore
+            printf '%s' "$KEYSTORE_BASE64" | base64 -d > keystore/ytmp3.jks
+            {
+              echo "storeFile=../keystore/ytmp3.jks"
+              echo "storePassword=$STORE_PASSWORD"
+              echo "keyAlias=$KEY_ALIAS"
+              echo "keyPassword=$KEY_PASSWORD"
+            } > keystore/signing.properties
+          fi
+          if [ ! -s keystore/ytmp3.jks ] || [ ! -s keystore/signing.properties ]; then
+            echo "::error::署名鍵が見つかりません。Settings → Secrets and variables → Actions に KEYSTORE_BASE64・STORE_PASSWORD・KEY_ALIAS・KEY_PASSWORD を登録してください"
+            exit 1
+          fi
+
+      # 壊れやすい決まりごと(おすすめの除外・ラジオ・バックアップ)の自動テスト。失敗したら APK を作らない
+      - name: Unit tests
+        run: |
+          chmod +x gradlew
+          ./gradlew testReleaseUnitTest --stacktrace
+
+      - name: Build release APK (fixed signing key)
+        run: |
+          ./gradlew assembleRelease --stacktrace
+
+      - name: Rename APK
+        run: |
+          V=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)
+          mkdir -p out
+          cp app/build/outputs/apk/release/app-release.apk "out/MusicPlayer-v${V}.apk"
+
+      # 保存容量を空けるため、残っている前のビルドの控えを消す(公開用の APK は別リポジトリなので消えない)
+      - name: Delete old build artifacts
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --paginate "repos/${{ github.repository }}/actions/artifacts?per_page=100" \
+            --jq '.artifacts[] | [.created_at, (.id|tostring)] | join(" ")' | sort | while read -r _ id; do
+            gh api -X DELETE "repos/${{ github.repository }}/actions/artifacts/$id" >/dev/null && echo "deleted $id" || true
+          done
+
+      # 控えは、公開用リポジトリに置けない時(トークン未登録・別のブランチ)だけ残す。
+      # いつもは公開用リポジトリのリリースが本体なので、Actions の保存容量を使わない
+      - uses: actions/upload-artifact@v6
+        if: ${{ env.RELEASES_TOKEN == '' || github.ref_name != 'main' || github.repository != 'Barista9409/MusicPlayer-app' }}
+        continue-on-error: true
+        with:
+          name: MusicPlayer-apk
+          path: out/*.apk
+          retention-days: 1
+
+      # アプリ内の「アプリを更新」用: 公開用リポジトリのリリースに APK を置く
+      - name: Publish APK for in-app updates
+        if: ${{ env.RELEASES_TOKEN != '' && github.ref_name == 'main' && github.repository == 'Barista9409/MusicPlayer-app' }}
+        env:
+          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
+        run: |
+          V=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)
+          C=$(grep -oP 'versionCode = \K[0-9]+' app/build.gradle.kts)
+          TAG="v${V}-${C}"
+          if gh release view "$TAG" --repo "$RELEASES_REPO" >/dev/null 2>&1; then
+            echo "Release $TAG already exists"; exit 0
+          fi
+          # 変更点(assets/changelog.txt のこの版の箇条書き)をリリースの説明に
+          NOTES=$(awk -v v="## ${V}" '$0==v{f=1;next} /^## /{f=0} f' app/src/main/assets/changelog.txt | sed 's/^- /・/')
+          printf '%s\n\nversionCode=%s\n' "$NOTES" "$C" > notes.txt
+          # 共有リンク用: いつも同じ名前(…/releases/latest/download/MusicPlayer.apk で最新版)
+          mkdir -p share && cp out/*.apk share/MusicPlayer.apk
+          # 版の番号で決める: 末尾が .0(例 10.27.0)= 安定版(最新)、それ以外(10.27.1 など)= 開発版(プレリリース)
+          if echo "$V" | grep -qE '^[0-9]+\.[0-9]+\.0$'; then KIND="--latest"; else KIND="--prerelease"; fi
+          gh release create "$TAG" out/*.apk share/MusicPlayer.apk --repo "$RELEASES_REPO" \
+            --title "MusicPlayer v${V}" --notes-file notes.txt $KIND
+
+      # 共有用ページ(アプリを使う人どうしの共有リンクを開くページ)を公開用リポジトリに置く。変わった時だけ
+      # 表示には公開用リポジトリの Settings → Pages で「main / (root)」を選んでおく必要がある
+      - name: Publish share page
+        if: ${{ env.RELEASES_TOKEN != '' && github.ref_name == 'main' && github.repository == 'Barista9409/MusicPlayer-app' }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
+        run: |
+          P=s/index.html
+          NEW=$(base64 -w0 share-page/s/index.html)
+          SHA=$(gh api "repos/$RELEASES_REPO/contents/$P" --jq .sha 2>/dev/null || true)
+          echo "$SHA" | grep -qE '^[0-9a-f]{40}$' || SHA=""
+          OLD=$(gh api "repos/$RELEASES_REPO/contents/$P" --jq .content 2>/dev/null | tr -d '\n' || true)
+          if [ "$OLD" = "$NEW" ]; then echo "共有用ページは変わっていない"; exit 0; fi
+          if [ -n "$SHA" ]; then
+            gh api -X PUT "repos/$RELEASES_REPO/contents/$P" -f message="Update share page" -f content="$NEW" -f sha="$SHA" --jq .commit.sha
+          else
+            gh api -X PUT "repos/$RELEASES_REPO/contents/$P" -f message="Add share page" -f content="$NEW" --jq .commit.sha
+          fi
+
+      # 公開用リポジトリは新しい 10 版だけ残す(古い APK を消して容量を空ける)。
+      # 並びは日付ではなくタグ末尾の versionCode で決める。今の版が公開されていない時・消す側に入った時は何も消さない
+      - name: Prune old releases
+        if: ${{ env.RELEASES_TOKEN != '' && github.ref_name == 'main' && github.repository == 'Barista9409/MusicPlayer-app' }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
+        run: |
+          V=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)
+          C=$(grep -oP 'versionCode = \K[0-9]+' app/build.gradle.kts)
+          TAG="v${V}-${C}"
+          if ! gh release view "$TAG" --repo "$RELEASES_REPO" >/dev/null 2>&1; then
+            echo "現在の版 $TAG が公開されていないので、整理しない"; exit 0
+          fi
+          gh api --paginate "repos/$RELEASES_REPO/releases?per_page=100" --jq '.[].tag_name' > tags.txt
+          awk -F- '{n=$NF; if (n !~ /^[0-9]+$/) n=0; print n, $0}' tags.txt | sort -k1,1nr > sorted.txt
+          echo "残す版:"; head -n 10 sorted.txt
+          # 今の安定版は古くても残す(安定版だけ受け取る人の更新・インストール用)
+          STABLE=$(gh release view --repo "$RELEASES_REPO" --json tagName --jq .tagName 2>/dev/null || true)
+          echo "安定版: $STABLE"
+          tail -n +11 sorted.txt | awk '{print $2}' | grep -vxF "${STABLE:-__none__}" > old.txt || true
+          if grep -qx "$TAG" old.txt; then echo "現在の版が消す側に入ったので中止"; exit 1; fi
+          while read -r t; do
+            [ -n "$t" ] && gh release delete "$t" --repo "$RELEASES_REPO" --yes --cleanup-tag && echo "deleted $t" || true
+          done < old.txt

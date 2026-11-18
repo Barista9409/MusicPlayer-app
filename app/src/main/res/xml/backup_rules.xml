@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 11 以前の自動バックアップ: 曲の一覧・プレイリスト・記録・設定だけ(画像やキャッシュは容量上限を超えないよう外す) -->
+<full-backup-content>
+    <include domain="file" path="history.json" />
+    <include domain="file" path="playlists.json" />
+    <include domain="file" path="ignored.json" />
+    <include domain="file" path="playlog.json" />
+    <include domain="file" path="alarms.json" />
+    <include domain="file" path="liked.json" />
+    <include domain="sharedpref" path="settings.xml" />
+    <include domain="sharedpref" path="library_ui.xml" />
+    <include domain="sharedpref" path="search.xml" />
+    <include domain="sharedpref" path="playback_queue.xml" />
+</full-backup-content>

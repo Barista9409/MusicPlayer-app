@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- スキン「sunset」の画面の背景: 背景色 + イラスト -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item><shape><solid android:color="?android:attr/colorBackground" /></shape></item>
+    <item android:drawable="@drawable/skin_sunset_art" />
+</layer-list>

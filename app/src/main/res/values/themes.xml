@@ -1,0 +1,28 @@
+<resources>
+    <!-- ライト: ネイビーのアクセントに金 -->
+    <style name="Theme.YtMp3" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/navy</item>
+        <item name="colorOnPrimary">@color/cream</item>
+        <item name="colorPrimaryContainer">#DCE2F2</item>
+        <item name="colorOnPrimaryContainer">@color/navy</item>
+        <item name="colorSecondary">@color/gold_dark</item>
+        <item name="colorOnSecondary">#FFFFFF</item>
+        <item name="colorSecondaryContainer">#F6E7C4</item>
+        <item name="colorOnSecondaryContainer">#3A2A08</item>
+        <item name="colorTertiary">@color/gold</item>
+        <item name="android:statusBarColor">@color/navy</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+
+    <!-- 再生画面: 下にスワイプ中に後ろの画面が見えるよう半透明ウィンドウ -->
+    <style name="Theme.YtMp3.NowPlaying">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+    </style>
+
+    <!-- ドラム式時刻の文字色 -->
+    <style name="ThemeOverlay.YtMp3.Wheel" parent="">
+        <item name="android:textColorPrimary">?attr/colorOnSurface</item>
+        <item name="colorControlNormal">@android:color/transparent</item>
+    </style>
+</resources>

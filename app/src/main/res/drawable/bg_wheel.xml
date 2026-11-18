@@ -1,0 +1,15 @@
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape>
+            <solid android:color="?attr/colorSurfaceContainerHigh" />
+            <corners android:radius="28dp" />
+        </shape>
+    </item>
+    <!-- 選択中の行のハイライト -->
+    <item android:gravity="center_vertical" android:height="64dp" android:left="12dp" android:right="12dp">
+        <shape>
+            <solid android:color="?attr/colorSecondaryContainer" />
+            <corners android:radius="16dp" />
+        </shape>
+    </item>
+</layer-list>

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12 以降の自動バックアップ(Google ドライブ)と機種変更時の引き継ぎ -->
+<data-extraction-rules>
+    <cloud-backup>
+        <include domain="file" path="history.json" />
+        <include domain="file" path="playlists.json" />
+        <include domain="file" path="ignored.json" />
+        <include domain="file" path="playlog.json" />
+        <include domain="file" path="alarms.json" />
+        <include domain="file" path="liked.json" />
+        <include domain="sharedpref" path="settings.xml" />
+        <include domain="sharedpref" path="library_ui.xml" />
+        <include domain="sharedpref" path="search.xml" />
+        <include domain="sharedpref" path="playback_queue.xml" />
+    </cloud-backup>
+    <device-transfer>
+        <include domain="file" path="history.json" />
+        <include domain="file" path="playlists.json" />
+        <include domain="file" path="ignored.json" />
+        <include domain="file" path="playlog.json" />
+        <include domain="file" path="alarms.json" />
+        <include domain="file" path="liked.json" />
+        <include domain="file" path="thumbs/" />
+        <include domain="sharedpref" path="settings.xml" />
+        <include domain="sharedpref" path="library_ui.xml" />
+        <include domain="sharedpref" path="search.xml" />
+        <include domain="sharedpref" path="playback_queue.xml" />
+    </device-transfer>
+</data-extraction-rules>
