@@ -311,26 +311,16 @@ object InnerTube {
      */
     fun audioUrl(videoId: String): String {
         var last: Exception? = null
-        val skipped = mutableListOf<StreamClient>()
         for (sc in streamClients()) {
-            if (isBroken(sc.key)) { skipped += sc; continue }
+            if (isBroken(sc.key)) continue
             try {
                 return tryClient(videoId, sc)
             } catch (e: Exception) {
                 last = e
             }
         }
-        // 使える速い方法が無い時は、遅い方法(yt-dlp)に回る前に、しばらく使わないことにした方法をもう一度だけ試す
-        // (一時的に断られただけのことが多く、yt-dlp は 10 秒以上かかるため)
-        for (sc in skipped) {
-            try {
-                val url = tryClient(videoId, sc)
-                brokenClients.remove(sc.key)
-                return url
-            } catch (e: Exception) {
-                last = e
-            }
-        }
+        // しばらく使わないことにした方法(はっきり断られたもの)は、10 分たつまで試し直さない
+        // (試し直すと、断られ続けている時に毎回むだに待つため。つながらないだけの時は、もともと使わない扱いにしていない)
         throw last ?: IllegalStateException("使える方法がありません")
     }
 
