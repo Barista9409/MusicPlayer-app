@@ -23,6 +23,8 @@ class PlaybackService : MediaLibraryService() {
     private var testing = false
 
     companion object {
+        /** URL を取っている最中の曲は、止まったと数えるまでこれだけ余分に待つ(遅い方法でも取り終えられるように) */
+        private const val FETCH_WAIT_MS = 45_000L
         /** 再生中・再生しようとしている(読み込み中も含む)。裏の作業(曲調の分析の通信など)が再生と取り合わないように見る */
         @Volatile var active = false
             private set
@@ -306,9 +308,20 @@ class PlaybackService : MediaLibraryService() {
                 val id = player.currentMediaItem?.mediaId ?: return
                 val vid = StreamDownload.videoId(player.currentMediaItem)
                 val pos = player.currentPosition
-                val r = Runnable {
+                // URL を取りに行く時の動画 ID(☁ の曲なども、仮の URL から読む)
+                val fetchVid = vid ?: player.currentMediaItem?.localConfiguration?.uri
+                    ?.takeIf { it.scheme == PlayerConnection.STREAM_SCHEME }?.lastPathSegment
+                var waited = 0L
+                lateinit var r: Runnable
+                r = Runnable {
                     if (player.playbackState != Player.STATE_BUFFERING || player.currentMediaItem?.mediaId != id) return@Runnable
                     if (kotlin.math.abs(player.currentPosition - pos) > 1500) return@Runnable
+                    // まだ URL を取っている最中なら、止まったとは数えずに待つ(遅い方法は 20 秒ほどかかる。取りやめると最初からになる)
+                    if (Searcher.isFetching(fetchVid) && waited < FETCH_WAIT_MS) {
+                        waited += 5_000
+                        tickHandler.postDelayed(r, 5_000)
+                        return@Runnable
+                    }
                     val n = (stuckTries[id] ?: 0) + 1
                     stuckTries[id] = n
                     ErrorLog.add("読み込み待ち", "15 秒動かない(${n} 回目) · ${describe(player)}")

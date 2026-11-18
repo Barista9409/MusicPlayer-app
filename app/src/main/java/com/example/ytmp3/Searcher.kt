@@ -163,6 +163,12 @@ object Searcher {
     /** 試聴の URL 取得の経路(押した時に画面に出す) */
     @Volatile var lastStream = ""
 
+    /** 先読みで、空き待ち(まだ取り始めていない)の動画 ID */
+    private val waitingSlot = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+
+    /** その曲の URL を今まさに取っている最中か(待っている間に取りやめて、最初からやり直さないように) */
+    fun isFetching(vid: String?): Boolean = vid != null && streams[vid]?.isActive == true
+
     /** 取得済みの URL(期限切れまで使い回す) */
     private val urlCache = java.util.concurrent.ConcurrentHashMap<String, String>()
 
@@ -192,11 +198,19 @@ object Searcher {
         unplayable[vid]?.let { why ->
             return kotlinx.coroutines.CompletableDeferred<String>().apply { completeExceptionally(Unplayable(why)) }
         }
-        streams[vid]?.takeIf { it.isActive }?.let { return it }
+        streams[vid]?.takeIf { it.isActive }?.let { old ->
+            // 先読みが空き待ちのまま(まだ取り始めていない)なら、待たずに今すぐ取り始める(再生の番が来た曲を後回しにしない)
+            if (priority && vid in waitingSlot) old.cancel() else return old
+        }
         val d = streamScope.async {
             val direct = vid !in ytdlpOnly
             val u = if (priority) fetchStream(url, "stream:$vid", direct)
-            else streamSlots.withPermit { fetchStream(url, "stream:$vid", direct) }
+            else {
+                waitingSlot.add(vid)
+                try {
+                    streamSlots.withPermit { waitingSlot.remove(vid); fetchStream(url, "stream:$vid", direct) }
+                } finally { waitingSlot.remove(vid) }
+            }
             urlCache[vid] = u
             // 取り終えたものは一覧から外す(聴いた曲の数だけ溜まり続けないように)。URL は urlCache に残る
             streams.remove(vid)
