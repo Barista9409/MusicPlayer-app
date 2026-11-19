@@ -375,6 +375,7 @@ object Searcher {
         val failures = mutableListOf<String>()
         try {
             val (how, url) = race(attempts, failures)
+            if (hedge) recordWinner(how, System.currentTimeMillis() - t0)
             val name = if (how == "直接") "直接: $lastDirect" else how
             lastStream = "再生URL ${sec(t0)}($name" + synchronized(failures) { failures.joinToString("") { " · $it" } } + ")"
             return url
@@ -391,6 +392,20 @@ object Searcher {
     }
 
     @Volatile private var lastDirect = ""
+
+    /** 今流す曲の URL を、どの取り方で何ミリ秒で取れたか(10 曲ごとに記録にまとめる。効いているかを見るため) */
+    private val winners = mutableListOf<Pair<String, Long>>()
+    private fun recordWinner(how: String, ms: Long) {
+        val batch = synchronized(winners) {
+            winners += how to ms
+            if (winners.size < 10) return
+            winners.toList().also { winners.clear() }
+        }
+        val text = batch.groupBy { it.first }.entries.sortedByDescending { it.value.size }.joinToString("、") { (k, v) ->
+            "$k ${v.size}曲(平均 ${String.format("%.1f", v.map { it.second }.average() / 1000)}秒)"
+        }
+        ErrorLog.add("取り方", "直近 10 曲: $text")
+    }
 
     private fun <T> Attempt<T>.copyNow() = Attempt(name, 0L, stop, run)
 

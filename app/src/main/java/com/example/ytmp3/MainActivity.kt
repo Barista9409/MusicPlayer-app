@@ -127,6 +127,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        StartupTiming.activityCreated()
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         saveLocation = SaveLocation(this)
