@@ -27,6 +27,7 @@ class App : Application() {
         StartupTiming.step("Net.init") { Net.init(this) }
         StartupTiming.step("Liked.init") { Liked.init(this) }
         StartupTiming.step("InnerTube.init") { InnerTube.init(this) }
+        PoToken.init(this)
         // 名乗り方の読み込み(yt-dlp の中身を読むので裏で)と、ネットの曲をすぐ鳴らすための下準備
         // (再生 URL の取り方・YouTube に名乗る情報。最初の 1 曲目が待たされないように)
         Thread {
@@ -43,6 +44,8 @@ class App : Application() {
             runCatching { UpdateNotifier.schedule(this) }
             // ウィジェットを今の版の絵で描き直す(更新直後に絵がずれないように)
             runCatching { MusicWidget.refreshAll(this) }
+            // 確認の合言葉(PO トークン)を裏で先に作っておく(最初の曲で待たないように)
+            if (Net.streamAllowed(this)) runCatching { NewPipeSource.warmUp() }
         }, 3000)
         StartupTiming.appDone(android.os.SystemClock.uptimeMillis() - t0)
     }

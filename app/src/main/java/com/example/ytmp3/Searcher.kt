@@ -394,11 +394,53 @@ object Searcher {
 
     private fun <T> Attempt<T>.copyNow() = Attempt(name, 0L, stop, run)
 
-    /** yt-dlp で音声の URL(既定 → tv の順) */
+    /**
+     * yt-dlp で最後に通った取り方(URL の c= から読む)。次からはまずそれだけを試す。
+     * yt-dlp は通る取り方を探していくつも試すので、当たりが分かっていればその分速い
+     */
+    @Volatile private var ytdlpClient: String? = null
+
+    /** URL の c=(取り方の名前)を、yt-dlp の呼び名に。分からなければ null(覚えない) */
+    private fun ytdlpClientOf(url: String): String? = when (Regex("[?&]c=([A-Z0-9_]+)").find(url)?.groupValues?.get(1)) {
+        "TVHTML5" -> "tv"
+        "TVHTML5_SIMPLY" -> "tv_simply"
+        "ANDROID_VR" -> "android_vr"
+        "ANDROID" -> "android"
+        "IOS" -> "ios"
+        "MWEB" -> "mweb"
+        "WEB_EMBEDDED_PLAYER" -> "web_embedded"
+        "WEB_CREATOR" -> "web_creator"
+        "WEB_REMIX" -> "web_music"
+        else -> null
+    }
+
+    /** 余計な問い合わせを省くと失敗した(次からは省かない) */
+    @Volatile private var ytdlpNoSkip = false
+
+    /** 覚えた取り方の指定(無ければ null)。うまくいっている間は、余計な問い合わせ(最初のページ・設定)も省く */
+    private fun learnedArgs(): String? = ytdlpClient?.let {
+        "youtube:player_client=$it" + if (ytdlpNoSkip) "" else ";player_skip=webpage,configs"
+    }
+
+    /** 試す順: 覚えた取り方だけ → 既定 → tv */
+    private fun ytdlpArgs(): List<String?> =
+        listOfNotNull(learnedArgs()).plus(listOf(null, "youtube:player_client=tv"))
+
+    /**
+     * 通った URL から取り方を覚える。覚えた取り方で失敗した時: 省いていたなら次から省かない、省いていなければ忘れる
+     * (失敗するたびに覚え直して、また失敗する、をくり返さないように)
+     */
+    private fun learnYtdlp(args: String?, url: String?) {
+        if (url != null) { ytdlpClientOf(url)?.let { if (it != ytdlpClient) { ytdlpClient = it; ytdlpNoSkip = false } }; return }
+        if (args == null || !args.contains("player_client=") || args == "youtube:player_client=tv" && ytdlpClient != "tv") return
+        if (args.contains("player_skip")) ytdlpNoSkip = true else ytdlpClient = null
+    }
+
+    /** yt-dlp で音声の URL(覚えた取り方 → 既定 → tv の順) */
     private suspend fun ytdlpAudio(videoUrl: String, pid: String): String {
         if (!DownloadManager.ready()) throw IllegalStateException("準備中です")
         var last: Exception? = null
-        for (args in listOf(null, "youtube:player_client=tv")) {
+        for (args in ytdlpArgs()) {
             try {
                 val req = YoutubeDLRequest(videoUrl).apply {
                     addOption("--no-playlist")
@@ -411,12 +453,14 @@ object Searcher {
                     if (args != null) addOption("--extractor-args", args)
                 }
                 val out = YoutubeDL.getInstance().execute(req, pid).out
-                out.lines().firstOrNull { it.startsWith("http") }?.let { return it.trim() }
+                out.lines().firstOrNull { it.startsWith("http") }?.let { learnYtdlp(args, it); return it.trim() }
+                learnYtdlp(args, null)
             } catch (e: YoutubeDL.CanceledException) {
                 throw e
             } catch (e: Exception) {
                 // Premium 限定などは、別の方法で試しても同じなのですぐ終える
                 permanentReason(e.message)?.let { r -> throw Unplayable(r) }
+                learnYtdlp(args, null)
                 last = e
             }
         }
@@ -454,19 +498,33 @@ object Searcher {
 
     private suspend fun ytdlpVideo(videoUrl: String, pid: String): InnerTube.VideoSources {
         if (!DownloadManager.ready()) throw IllegalStateException("準備中です")
-        val req = YoutubeDLRequest(videoUrl).apply {
-            addOption("--no-playlist")
-            addOption("-f", "bv*[height<=720][ext=mp4]+ba[ext=m4a]/bv*[height<=720]+ba/b[height<=720]/b")
-            addOption("-g")
-            addOption("--no-warnings")
-            DownloadManager.cacheDir()?.let { addOption("--cache-dir", it.absolutePath) }
+        var last: Exception? = null
+        // 覚えた取り方があればまずそれだけで(音声と同じ)。だめなら既定で
+        val tries = listOfNotNull(learnedArgs()) + listOf(null)
+        for (args in tries) {
+            try {
+                val req = YoutubeDLRequest(videoUrl).apply {
+                    addOption("--no-playlist")
+                    addOption("-f", "bv*[height<=720][ext=mp4]+ba[ext=m4a]/bv*[height<=720]+ba/b[height<=720]/b")
+                    addOption("-g")
+                    addOption("--no-warnings")
+                    DownloadManager.cacheDir()?.let { addOption("--cache-dir", it.absolutePath) }
+                    if (args != null) addOption("--extractor-args", args)
+                }
+                val lines = YoutubeDL.getInstance().execute(req, pid).out.lines().filter { it.startsWith("http") }
+                learnYtdlp(args, lines.firstOrNull())
+                when {
+                    lines.size >= 2 -> return InnerTube.VideoSources(lines[0].trim(), lines[1].trim(), null, "720p")
+                    lines.size == 1 -> return InnerTube.VideoSources(null, null, lines[0].trim(), "")
+                }
+            } catch (e: YoutubeDL.CanceledException) {
+                throw e
+            } catch (e: Exception) {
+                learnYtdlp(args, null)
+                last = e
+            }
         }
-        val lines = YoutubeDL.getInstance().execute(req, pid).out.lines().filter { it.startsWith("http") }
-        return when {
-            lines.size >= 2 -> InnerTube.VideoSources(lines[0].trim(), lines[1].trim(), null, "720p")
-            lines.size == 1 -> InnerTube.VideoSources(null, null, lines[0].trim(), "")
-            else -> throw IllegalStateException("動画の URL を取得できませんでした")
-        }
+        throw last ?: IllegalStateException("動画の URL を取得できませんでした")
     }
 
     fun cancel() {

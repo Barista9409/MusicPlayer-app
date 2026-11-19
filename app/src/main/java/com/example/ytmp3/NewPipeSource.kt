@@ -9,6 +9,7 @@ import org.schabi.newpipe.extractor.downloader.Response
 import org.schabi.newpipe.extractor.exceptions.ReCaptchaException
 import org.schabi.newpipe.extractor.localization.ContentCountry
 import org.schabi.newpipe.extractor.localization.Localization
+import org.schabi.newpipe.extractor.services.youtube.extractors.YoutubeStreamExtractor
 import org.schabi.newpipe.extractor.stream.AudioStream
 import org.schabi.newpipe.extractor.stream.DeliveryMethod
 import org.schabi.newpipe.extractor.stream.StreamInfo
@@ -41,7 +42,14 @@ object NewPipeSource {
     @Synchronized private fun ensureInit() {
         if (ready) return
         NewPipe.init(Dl, Localization("ja", "JP"), ContentCountry("JP"))
+        // 確認の合言葉(PO トークン)を付けて問い合わせる(付けないと、曲の途中で断られる)
+        YoutubeStreamExtractor.setPoTokenProvider(PoToken)
         ready = true
+    }
+
+    /** 起動後に裏で: 確認の合言葉を先に作っておく */
+    fun warmUp() {
+        Thread({ runCatching { ensureInit(); PoToken.warmUp() } }, "newpipe-warm").start()
     }
 
     /** NewPipe が問い合わせに使う通信(Android 標準の仕組みで) */
