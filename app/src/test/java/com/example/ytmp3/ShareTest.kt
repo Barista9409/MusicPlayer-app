@@ -17,8 +17,8 @@ class ShareTest {
         assertEquals(p, Share.decode(Share.PAGE + "?openExternalBrowser=1#" + Share.encode(p)))
         assertEquals(p, Share.decode(link))
         // LINE の文ごと貼られても読める
-        assertEquals(p, Share.decode(Share.message(p)))
-        assertTrue(Share.isShare(Share.message(p)))
+        assertEquals(p, Share.decode(Share.link(p)))
+        assertTrue(Share.isShare(Share.link(p)))
     }
 
     @Test fun readsOldLinksWithoutQuery() {

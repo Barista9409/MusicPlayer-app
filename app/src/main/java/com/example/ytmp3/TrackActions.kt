@@ -110,7 +110,10 @@ class TrackActions(private val activity: AppCompatActivity) {
         fun sendLink() {
             if (note.isNotEmpty()) toast(note)
             activity.startActivity(android.content.Intent.createChooser(android.content.Intent(android.content.Intent.ACTION_SEND)
-                .setType("text/plain").putExtra(android.content.Intent.EXTRA_TEXT, Share.message(p)), "共有"))
+                // 本文はリンクだけ(「コピー」でリンクだけが写るように)。何の共有かは、共有画面の見出しと件名に
+                .setType("text/plain").putExtra(android.content.Intent.EXTRA_TEXT, Share.link(p))
+                .putExtra(android.content.Intent.EXTRA_TITLE, Share.title(p))
+                .putExtra(android.content.Intent.EXTRA_SUBJECT, Share.title(p)), "共有"))
         }
         if (pairs.size <= Share.LINK_MAX) { sendLink(); return }
         MaterialAlertDialogBuilder(activity)

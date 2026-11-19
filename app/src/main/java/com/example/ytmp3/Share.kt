@@ -52,12 +52,10 @@ object Share {
         return Payload(kind, name, ids)
     }
 
-    /** LINE などに送る文 */
-    fun message(p: Payload): String {
-        val what = if (p.kind == Kind.SONG && p.ids.size == 1) "曲「${p.name}」"
-            else "${p.kind.label}「${p.name}」(${p.ids.size} 曲)"
-        return "🎵 $what を共有します\n${link(p)}\n\nMusicPlayer で開くと、そのままライブラリに追加できます"
-    }
+    /** 何の共有か(共有画面の見出し・メールの件名に。送る本文はリンクだけ) */
+    fun title(p: Payload): String =
+        if (p.kind == Kind.SONG && p.ids.size == 1) "🎵 曲「${p.name}」"
+        else "🎵 ${p.kind.label}「${p.name}」(${p.ids.size} 曲)"
 
     /** 大きいリストをファイルで送る時の中身(読めるように曲名つき。アプリはリンクの行を読む) */
     fun fileText(p: Payload, titles: List<String>): String = buildString {
