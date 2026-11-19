@@ -3,8 +3,8 @@ package com.example.ytmp3
 /**
  * アプリを使う人どうしで、曲・アルバム・プレイリストを共有するリンク。
  *
- * 中身(曲の ID とプレイリスト名)はリンクの # より後ろに入れるので、ページのサーバーには送られず、どこにも保存されない。
- * 形: https://barista9409.github.io/MusicPlayer-releases/s/?openExternalBrowser=1#1p.<名前(base64url)>.<動画 ID 11 文字 × 曲数>
+ * 中身(曲の ID とプレイリスト名)はリンクの ?p= に入れる(以前は # の後ろだったが、LINE などで # の後ろが消えて開けないことがあった)。
+ * 形: https://barista9409.github.io/MusicPlayer-releases/s/?openExternalBrowser=1&p=1p.<名前(base64url)>.<動画 ID 11 文字 × 曲数>
  *   1 = 形式の版 / p = プレイリスト, a = アルバム, s = 曲
  * 共有用ページの「アプリで開く」からは musicplayer://share/<同じ中身> で届く
  */
@@ -21,7 +21,8 @@ object Share {
     data class Payload(val kind: Kind, val name: String, val ids: List<String>)
 
     private val ID = Regex("[A-Za-z0-9_-]{11}")
-    private val FIND = Regex("(?:MusicPlayer-releases/s/?(?:\\?[^#\\s]*)?#|musicplayer://share/)(1[pas]\\.[A-Za-z0-9_-]*\\.[A-Za-z0-9_-]*)")
+    // 前の形(# の後ろ)・今の形(?p=)・アプリで開く(musicplayer://share/)のどれでも読む
+    private val FIND = Regex("(?:MusicPlayer-releases/s/?(?:\\?[^#\\s]*)?#|MusicPlayer-releases/s/?\\?(?:[^#\\s]*&)?p=|musicplayer://share/)(1[pas]\\.[A-Za-z0-9_-]*\\.[A-Za-z0-9_-]*)")
 
     fun encode(p: Payload): String {
         val name = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(p.name.toByteArray(Charsets.UTF_8))
@@ -32,7 +33,7 @@ object Share {
      * 共有リンク。?openExternalBrowser=1 は LINE の決まりで、LINE の中ではなくふつうのブラウザで開かせる
      * (LINE の中のブラウザからはアプリを開けないため)。ほかのアプリでは何もしない
      */
-    fun link(p: Payload) = PAGE + "?openExternalBrowser=1#" + encode(p)
+    fun link(p: Payload) = PAGE + "?openExternalBrowser=1&p=" + encode(p)
 
     /** 文字の中に共有リンクがあるか */
     fun isShare(text: String) = FIND.containsMatchIn(text)

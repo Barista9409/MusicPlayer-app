@@ -12,7 +12,9 @@ class ShareTest {
     @Test fun roundTripsThroughLinkAndMessage() {
         val p = Share.Payload(Share.Kind.PLAYLIST, "ドライブ用 🚗", ids)
         val link = Share.link(p)
-        assertTrue(link.startsWith(Share.PAGE + "?openExternalBrowser=1#1p."))
+        assertTrue(link.startsWith(Share.PAGE + "?openExternalBrowser=1&p=1p."))
+        // 前の形(# の後ろ)のリンクも読める
+        assertEquals(p, Share.decode(Share.PAGE + "?openExternalBrowser=1#" + Share.encode(p)))
         assertEquals(p, Share.decode(link))
         // LINE の文ごと貼られても読める
         assertEquals(p, Share.decode(Share.message(p)))
