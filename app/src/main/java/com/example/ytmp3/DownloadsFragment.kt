@@ -616,7 +616,7 @@ class DownloadsFragment : Fragment(R.layout.fragment_downloads) {
         // どの取り方で曲・動画の URL を取れているか(最近 100 件)
         box.addView(com.google.android.material.button.MaterialButton(ctx, null,
             com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
-            text = "取り方の内訳を見る(最近 ${FetchStats.MAX} 件)"
+            text = "取り方の内訳を見る(最近 ${FetchStats.CHART_SONGS} 曲)"
             setOnClickListener { showFetchStats() }
         })
         val mask = com.google.android.material.materialswitch.MaterialSwitch(ctx).apply { text = "曲名を伏せる" }
@@ -642,8 +642,27 @@ class DownloadsFragment : Fragment(R.layout.fragment_downloads) {
         })
         mask.setOnCheckedChangeListener { _, _ -> refresh() }
         refresh()
-        MaterialAlertDialogBuilder(ctx)
-            .setTitle("問題を送る")
+        // 見出しの右に ✕(閉じる)
+        var dialog: androidx.appcompat.app.AlertDialog? = null
+        val titleRow = LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_VERTICAL
+            setPadding((24 * d).toInt(), (16 * d).toInt(), (12 * d).toInt(), 0)
+            addView(TextView(ctx).apply {
+                text = "問題を送る"
+                setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_HeadlineSmall)
+            }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            addView(android.widget.ImageButton(ctx).apply {
+                setImageResource(R.drawable.ic_close)
+                contentDescription = "閉じる"
+                val tv = android.util.TypedValue()
+                ctx.theme.resolveAttribute(android.R.attr.selectableItemBackgroundBorderless, tv, true)
+                setBackgroundResource(tv.resourceId)
+                setOnClickListener { dialog?.dismiss() }
+            }, LinearLayout.LayoutParams((48 * d).toInt(), (48 * d).toInt()))
+        }
+        dialog = MaterialAlertDialogBuilder(ctx)
+            .setCustomTitle(titleRow)
             .setView(box)
             .setPositiveButton("送る") { _, _ ->
                 startActivity(android.content.Intent.createChooser(android.content.Intent(android.content.Intent.ACTION_SEND)
@@ -666,6 +685,61 @@ class DownloadsFragment : Fragment(R.layout.fragment_downloads) {
             .show()
     }
 
+    /** 横棒グラフ: 最近 100 曲で、URL を取れた方法(直接・NewPipe・yt-dlp)ごとの曲数 */
+    private fun fetchChart(): View {
+        val ctx = requireContext()
+        val d = resources.displayMetrics.density
+        val (bars, failed, total) = FetchStats.songChart()
+        val accent = com.google.android.material.color.MaterialColors.getColor(ctx,
+            com.google.android.material.R.attr.colorPrimary, android.graphics.Color.GRAY)
+        val sub = com.google.android.material.color.MaterialColors.getColor(ctx,
+            com.google.android.material.R.attr.colorOnSurfaceVariant, android.graphics.Color.GRAY)
+        val col = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            val pad = (20 * d).toInt()
+            setPadding(pad, (8 * d).toInt(), pad, (8 * d).toInt())
+        }
+        col.addView(TextView(ctx).apply {
+            text = if (total == 0) "まだ記録がありません(ネットの曲を流すと記録されます)"
+                else "最近 $total 曲で、URL を取れた方法"
+            setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_TitleSmall)
+            setPadding(0, 0, 0, (8 * d).toInt())
+        })
+        if (total == 0) return col
+        val max = bars.maxOf { it.count }.coerceAtLeast(1)
+        bars.forEach { b ->
+            val row = LinearLayout(ctx).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = android.view.Gravity.CENTER_VERTICAL
+                setPadding(0, (4 * d).toInt(), 0, (4 * d).toInt())
+            }
+            row.addView(TextView(ctx).apply { text = b.how; textSize = 13f },
+                LinearLayout.LayoutParams((64 * d).toInt(), LinearLayout.LayoutParams.WRAP_CONTENT))
+            // 棒(いちばん多い方法を全幅として、曲数の割合で伸ばす)
+            val track = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; weightSum = max.toFloat() }
+            track.addView(View(ctx).apply {
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    setColor(accent); cornerRadius = 4 * d
+                }
+            }, LinearLayout.LayoutParams(0, (18 * d).toInt(), b.count.toFloat()))
+            row.addView(track, LinearLayout.LayoutParams(0, (18 * d).toInt(), 1f))
+            row.addView(TextView(ctx).apply {
+                text = if (b.count == 0) "0曲" else "${b.count}曲 · ${String.format("%.1f", b.avgMs / 1000)}秒"
+                textSize = 12f
+                setTextColor(sub)
+                setPadding((8 * d).toInt(), 0, 0, 0)
+            }, LinearLayout.LayoutParams((92 * d).toInt(), LinearLayout.LayoutParams.WRAP_CONTENT))
+            col.addView(row)
+        }
+        col.addView(TextView(ctx).apply {
+            text = (if (failed > 0) "取れなかった曲: $failed 曲\n" else "") + "秒は、取れるまでにかかった時間の平均"
+            textSize = 11f
+            setTextColor(sub)
+            setPadding(0, (6 * d).toInt(), 0, 0)
+        })
+        return col
+    }
+
     /** 取り方の内訳: どの方法で何件・何秒、取れなかった理由、新しい順 */
     private fun showFetchStats() {
         val ctx = requireContext()
@@ -679,9 +753,14 @@ class DownloadsFragment : Fragment(R.layout.fragment_downloads) {
             val pad = (20 * d).toInt()
             setPadding(pad, (8 * d).toInt(), pad, 0)
         }
+        val content = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(fetchChart())
+            addView(tv)
+        }
         MaterialAlertDialogBuilder(ctx)
             .setTitle("取り方の内訳")
-            .setView(android.widget.ScrollView(ctx).apply { addView(tv) })
+            .setView(android.widget.ScrollView(ctx).apply { addView(content) })
             .setPositiveButton("閉じる", null)
             .setNegativeButton("コピー") { _, _ ->
                 val cm = ctx.getSystemService(android.content.ClipboardManager::class.java)

@@ -9,7 +9,9 @@ import org.json.JSONObject
  * 問題を送る画面の「取り方の内訳」で見られる。どの方法が効いているかを調べるため
  */
 object FetchStats {
-    const val MAX = 100
+    /** 保存しておく件数(グラフは、このうち曲の最近 100 曲で数える) */
+    const val MAX = 300
+    const val CHART_SONGS = 100
 
     data class Entry(
         val at: Long,
@@ -137,6 +139,25 @@ object FetchStats {
                 append("\n")
             }
         }
+    }
+
+    /** グラフの 1 本: 方法・取れた曲数・平均の時間(ミリ秒) */
+    data class Bar(val how: String, val count: Int, val avgMs: Double)
+
+    /** グラフに並べる方法(いつも同じ順) */
+    val METHODS = listOf("直接", "NewPipe", "yt-dlp")
+
+    /**
+     * 最近 n 曲で、URL を取れた方法ごとの曲数(先読み・今流す曲の両方。用意済みは先読みの時に数えてあるので除く)。
+     * 戻り値: 方法ごとの棒、取れなかった曲数、対象の曲数
+     */
+    fun songChart(n: Int = CHART_SONGS): Triple<List<Bar>, Int, Int> {
+        val songs = entries().filter { it.kind == "曲" && it.mode != READY }.takeLast(n)
+        val bars = METHODS.map { m ->
+            val v = songs.filter { it.how == m }
+            Bar(m, v.size, if (v.isEmpty()) 0.0 else v.map { it.ms.toDouble() }.average())
+        }
+        return Triple(bars, songs.count { it.how == FAILED }, songs.size)
     }
 
     /** 問題の報告に入れる短いまとめ(今流した曲のみ) */
