@@ -22,8 +22,8 @@ android {
         applicationId = "com.example.ytmp3"
         minSdk = 29
         targetSdk = 34
-        versionCode = 335
-        versionName = "10.59.3"
+        versionCode = 336
+        versionName = "10.59.4"
         ndk {
             abiFilters += listOf("arm64-v8a", "armeabi-v7a")
         }

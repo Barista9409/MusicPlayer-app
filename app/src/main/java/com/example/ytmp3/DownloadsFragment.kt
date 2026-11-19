@@ -613,6 +613,12 @@ class DownloadsFragment : Fragment(R.layout.fragment_downloads) {
             textSize = 14f
         }
         box.addView(note)
+        // どの取り方で曲・動画の URL を取れているか(最近 100 件)
+        box.addView(com.google.android.material.button.MaterialButton(ctx, null,
+            com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+            text = "取り方の内訳を見る(最近 ${FetchStats.MAX} 件)"
+            setOnClickListener { showFetchStats() }
+        })
         val mask = com.google.android.material.materialswitch.MaterialSwitch(ctx).apply { text = "曲名を伏せる" }
         box.addView(mask)
         box.addView(TextView(ctx).apply {
@@ -660,6 +666,35 @@ class DownloadsFragment : Fragment(R.layout.fragment_downloads) {
             .show()
     }
 
+    /** 取り方の内訳: どの方法で何件・何秒、取れなかった理由、新しい順 */
+    private fun showFetchStats() {
+        val ctx = requireContext()
+        val d = resources.displayMetrics.density
+        val text = FetchStats.report()
+        val tv = TextView(ctx).apply {
+            this.text = text
+            setTextIsSelectable(true)
+            typeface = android.graphics.Typeface.MONOSPACE
+            textSize = 11f
+            val pad = (20 * d).toInt()
+            setPadding(pad, (8 * d).toInt(), pad, 0)
+        }
+        MaterialAlertDialogBuilder(ctx)
+            .setTitle("取り方の内訳")
+            .setView(android.widget.ScrollView(ctx).apply { addView(tv) })
+            .setPositiveButton("閉じる", null)
+            .setNegativeButton("コピー") { _, _ ->
+                val cm = ctx.getSystemService(android.content.ClipboardManager::class.java)
+                cm.setPrimaryClip(android.content.ClipData.newPlainText("取り方の内訳", "【MusicPlayer 取り方の内訳】\n" + text))
+                android.widget.Toast.makeText(ctx, "コピーしました", android.widget.Toast.LENGTH_SHORT).show()
+            }
+            .setNeutralButton("記録を消す") { _, _ ->
+                FetchStats.clear()
+                android.widget.Toast.makeText(ctx, "取り方の記録を消しました", android.widget.Toast.LENGTH_SHORT).show()
+            }
+            .show()
+    }
+
     /** 報告の本文(版・端末・関係する設定・エラー履歴) */
     private fun reportText(note: String, maskTitles: Boolean): String {
         val c = requireContext()
@@ -670,6 +705,7 @@ class DownloadsFragment : Fragment(R.layout.fragment_downloads) {
             append("内容: ").append(note.ifBlank { "(書かれていません)" }).append("\n\n")
             append("版: v${AppUpdater.currentName(c)} (${AppUpdater.currentCode(c)}) · 安定版のみ: ${onOff(!AppUpdater.wantsDev(c))}\n")
             append("取り方: yt-dlp ${runCatching { DownloadManager.engineVersion() }.getOrDefault("?")} · NewPipe ${NewPipeSource.version}\n")
+            append("取り方の内訳: ${FetchStats.summary()}\n")
             append("端末: ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL} / Android ${android.os.Build.VERSION.RELEASE}\n")
             append("設定: ラジオ ${onOff(AutoContinue.isGlobalOn(c))} · 音量をそろえる ${onOff(VolumeLeveler.isOn(c))} · " +
                 "イコライザー ${SoundSettings.label(c)} · 曲間フェード ${SoundSettings.fadeSec(c)}秒 · 止まったら次へ ${onOff(AutoSkip.isOn(c))}\n")

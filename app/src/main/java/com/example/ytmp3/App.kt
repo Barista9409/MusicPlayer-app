@@ -28,6 +28,7 @@ class App : Application() {
         StartupTiming.step("Liked.init") { Liked.init(this) }
         StartupTiming.step("InnerTube.init") { InnerTube.init(this) }
         PoToken.init(this)
+        FetchStats.init(this)
         // 名乗り方の読み込み(yt-dlp の中身を読むので裏で)と、ネットの曲をすぐ鳴らすための下準備
         // (再生 URL の取り方・YouTube に名乗る情報。最初の 1 曲目が待たされないように)
         Thread {
