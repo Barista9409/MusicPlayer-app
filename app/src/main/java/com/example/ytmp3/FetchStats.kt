@@ -51,7 +51,9 @@ object FetchStats {
         }
     }
 
-    fun add(kind: String, mode: String, how: String, ms: Long, fails: List<String> = emptyList()) {
+    fun add(kind: String, mode: String, how: String, ms: Long, fails: List<String> = emptyList(), vid: String? = null) {
+        // 今流す曲として取った曲は、そのあと読み直しで URL を使い回しても「用意済み」とは数えない
+        if (mode == NOW && vid != null) synchronized(readyAt) { readyAt[vid] = System.currentTimeMillis() }
         synchronized(list) {
             list.addLast(Entry(System.currentTimeMillis(), kind, mode, how, ms, fails))
             while (list.size > MAX) list.removeFirst()

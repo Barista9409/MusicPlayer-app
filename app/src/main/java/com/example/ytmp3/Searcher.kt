@@ -379,7 +379,7 @@ object Searcher {
         val failures = mutableListOf<String>()
         try {
             val (how, url) = race(attempts, failures)
-            FetchStats.add("曲", if (hedge) FetchStats.NOW else FetchStats.AHEAD, how, System.currentTimeMillis() - t0, synchronized(failures) { failures.toList() })
+            FetchStats.add("曲", if (hedge) FetchStats.NOW else FetchStats.AHEAD, how, System.currentTimeMillis() - t0, synchronized(failures) { failures.toList() }, vid)
             val name = if (how == "直接") "直接: $lastDirect" else how
             lastStream = "再生URL ${sec(t0)}($name" + synchronized(failures) { failures.joinToString("") { " · $it" } } + ")"
             return url

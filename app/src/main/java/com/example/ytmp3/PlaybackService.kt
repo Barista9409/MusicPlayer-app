@@ -761,6 +761,7 @@ class PlaybackService : MediaLibraryService() {
                     local?.toMediaItem() ?: PlayerConnection.streamItem(r)
                 }
                 p.addMediaItems(items)
+                warmAhead(p, 3) // 足した曲も先に URL を取っておく
             } finally {
                 appending = false
             }
@@ -1026,7 +1027,7 @@ class PlaybackService : MediaLibraryService() {
                 val items = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                     runCatching { DailyMix.more(index, exclude) }.getOrDefault(emptyList())
                 }
-                if (items.isNotEmpty() && DailyMix.activeIndex() == index) p.addMediaItems(items)
+                if (items.isNotEmpty() && DailyMix.activeIndex() == index) { p.addMediaItems(items); warmAhead(p, 3) }
             } finally {
                 appending = false
             }
@@ -1041,7 +1042,11 @@ class PlaybackService : MediaLibraryService() {
         repeat(n) {
             i = tl.getNextWindowIndex(i, Player.REPEAT_MODE_OFF, player.shuffleModeEnabled)
             if (i == C.INDEX_UNSET) return
-            StreamDownload.videoId(player.getMediaItemAt(i))?.let { runCatching { Searcher.warm(it) } }
+            // 試聴の曲も、ライブラリの ☁(オンライン)の曲も、ネットから読む曲(ytstream://)なら先に URL を取る
+            val item = player.getMediaItemAt(i)
+            val vid = StreamDownload.videoId(item) ?: item.localConfiguration?.uri
+                ?.takeIf { it.scheme == PlayerConnection.STREAM_SCHEME }?.lastPathSegment
+            vid?.let { runCatching { Searcher.warm(it) } }
         }
     }
 
