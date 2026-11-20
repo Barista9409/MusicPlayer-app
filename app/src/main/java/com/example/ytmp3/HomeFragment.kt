@@ -125,7 +125,7 @@ class HomeFragment : Fragment(R.layout.fragment_home), androidx.media3.common.Pl
                         combine(Repository.tracks, Repository.playlists, Repository.missing) { _, _, _ -> },
                         combine(PlayLog.changed, NewReleases.list, NewReleases.related) { _, _, _ -> },
                         combine(DailyDiscover.list, Liked.list, DailyDiscover.loading, NewReleases.loading) { _, _, _, _ -> },
-                        combine(NoGood.songs, NoGood.artists) { _, _ -> },
+                        combine(NoGood.songs, NoGood.artists, ChartSongs.all, ChartSongs.loading) { _, _, _, _ -> },
                         // あなたのミックス: 曲調の分析が進んだ時・分析中の表示
                         combine(MoodMix.changed, MixPrefs.changed, DailyMix.lastArt, ArtistGenres.changed) { _, _, _, _ -> },
                     ) { _, _, _, _, _ -> }
@@ -355,6 +355,21 @@ class HomeFragment : Fragment(R.layout.fragment_home), androidx.media3.common.Pl
                         render()
                     })
                 content.addView(songCarousel(disc, scrollKey = "discover", noGood = true))
+            }
+            },
+            "chart" to {
+            // いま人気の曲: 日本の週間ランキングから、まだ知らない曲だけ(順位順)
+            ChartSongs.refresh(requireContext())
+            val hits = ChartSongs.fresh().take(30)
+            if (hits.isNotEmpty()) {
+                header("いま人気の曲", "日本の週間ランキングから、まだ聴いていない曲", action = "▶ 全部試聴" to { main.player.playSearch(hits, 0) },
+                    loading = ChartSongs.loading.value,
+                    refresh = {
+                        hScroll.remove("chart") // 取り直したら左端から
+                        ChartSongs.refresh(requireContext(), force = true)
+                        render()
+                    })
+                content.addView(songCarousel(hits, scrollKey = "chart", noGood = true))
             }
             },
             "new" to {

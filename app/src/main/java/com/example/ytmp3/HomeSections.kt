@@ -15,6 +15,7 @@ object HomeSections {
         "mix" to "あなたのミックス",
         "stats" to "最近の記録",
         "discover" to "おすすめの曲",
+        "chart" to "いま人気の曲",
         "new" to "ニューリリース",
         "related" to "おすすめのアーティスト",
         "buttons" to "すぐ再生(全曲シャッフルなど)",
@@ -23,10 +24,10 @@ object HomeSections {
 
     /** 最初の並び(「元に戻す」もこれ) */
     val defaultOrder = listOf(
-        "buttons", "quick", "related", "discover", "new", "recent",
+        "buttons", "quick", "related", "discover", "chart", "new", "recent",
         "top", "added", "liked", "mix", "stats", "library",
     ).filter { it in labels } + labels.keys.filter { it !in setOf(
-        "buttons", "quick", "related", "discover", "new", "recent", "top", "added", "liked", "mix", "stats", "library") }
+        "buttons", "quick", "related", "discover", "chart", "new", "recent", "top", "added", "liked", "mix", "stats", "library") }
 
     /** 最初に隠しておく欄 */
     val defaultHidden = setOf("buttons", "top", "added", "mix", "library")
@@ -35,8 +36,14 @@ object HomeSections {
         val saved = p.getString("home_order", null)?.let { j ->
             runCatching { JSONArray(j).let { a -> List(a.length()) { a.getString(it) } } }.getOrNull()
         } ?: return defaultOrder
-        // 新しく増えた欄は後ろに
-        return saved.filter { it in labels } + defaultOrder.filter { it !in saved }
+        // 新しく増えた欄は、最初の並びでのすぐ前の欄の後ろに入れる(無ければ後ろに)
+        val out = saved.filter { it in labels }.toMutableList()
+        defaultOrder.forEachIndexed { i, key ->
+            if (key in out) return@forEachIndexed
+            val before = defaultOrder.take(i).lastOrNull { it in out }
+            if (before == null) out.add(0, key) else out.add(out.indexOf(before) + 1, key)
+        }
+        return out
     }
 
     fun hidden(p: SharedPreferences): Set<String> =
