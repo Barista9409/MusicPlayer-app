@@ -39,6 +39,15 @@ import org.json.JSONArray
 class SearchFragment : Fragment(R.layout.fragment_search) {
     private val main get() = requireActivity() as MainActivity
     private val adapter = Adapter()
+    /** 検索先が「ライブラリ」の時(端末・☁ の曲から探す) */
+    private var libraryMode = false
+    private var resultsList: RecyclerView? = null
+    private val libAdapter by lazy {
+        TrackAdapter(
+            onClick = { pos -> main.player.play(libAdapter.items.toList(), pos) },
+            onMore = { v, pos -> libTrackMenu(v, libAdapter.items[pos]) },
+        )
+    }
     private val prefs by lazy { requireContext().getSharedPreferences("search", Context.MODE_PRIVATE) }
 
     private lateinit var query: EditText
@@ -142,22 +151,30 @@ class SearchFragment : Fragment(R.layout.fragment_search) {
         // アーティストは丸いカードを 3 列で。見出し・曲などは横いっぱい
         list.layoutManager = androidx.recyclerview.widget.GridLayoutManager(requireContext(), 3).apply {
             spanSizeLookup = object : androidx.recyclerview.widget.GridLayoutManager.SpanSizeLookup() {
-                override fun getSpanSize(position: Int) = if (adapter.getItemViewType(position) == 3) 1 else 3
+                override fun getSpanSize(position: Int) = if (!libraryMode && adapter.getItemViewType(position) == 3) 1 else 3
             }
         }
         list.adapter = adapter
+        resultsList = list
         list.itemAnimator = null
         // 下までスクロールしたら続きを読み込む
         list.addOnScrollListener(object : RecyclerView.OnScrollListener() {
             override fun onScrolled(rv: RecyclerView, dx: Int, dy: Int) {
                 val last = (rv.layoutManager as LinearLayoutManager).findLastVisibleItemPosition()
-                if (dy > 0 && last >= adapter.itemCount - 7) loadMore()
+                if (!libraryMode && dy > 0 && last >= adapter.itemCount - 7) loadMore()
             }
         })
 
-        source = if (prefs.getString("source", "music") == "youtube") Searcher.Source.YOUTUBE else Searcher.Source.MUSIC
+        val savedSource = prefs.getString("source", "music")
+        source = if (savedSource == "youtube") Searcher.Source.YOUTUBE else Searcher.Source.MUSIC
+        libraryMode = savedSource == "library"
         val toggle = view.findViewById<MaterialButtonToggleGroup>(R.id.source)
-        toggle.check(if (source == Searcher.Source.MUSIC) R.id.srcMusic else R.id.srcYoutube)
+        sourceToggle = toggle
+        toggle.check(when {
+            libraryMode -> R.id.srcLibrary
+            source == Searcher.Source.MUSIC -> R.id.srcMusic
+            else -> R.id.srcYoutube
+        })
         musicOrder = Order.entries.firstOrNull { it.key == prefs.getString("musicOrder", null) }
             ?: if (prefs.getBoolean("musicPopular", false)) Order.POP else Order.REL
         ytOrder = Order.entries.firstOrNull { it.key == prefs.getString("ytOrder", null) }
@@ -165,10 +182,16 @@ class SearchFragment : Fragment(R.layout.fragment_search) {
         sort = if (ytOrder == Order.POP) Searcher.Sort.VIEWS else Searcher.Sort.RELEVANCE
         toggle.addOnButtonCheckedListener { _, id, checked ->
             if (!checked) return@addOnButtonCheckedListener
-            source = if (id == R.id.srcYoutube) Searcher.Source.YOUTUBE else Searcher.Source.MUSIC
-            prefs.edit().putString("source", if (source == Searcher.Source.YOUTUBE) "youtube" else "music").apply()
+            libraryMode = id == R.id.srcLibrary
+            if (!libraryMode) source = if (id == R.id.srcYoutube) Searcher.Source.YOUTUBE else Searcher.Source.MUSIC
+            prefs.edit().putString("source", when {
+                libraryMode -> "library"
+                source == Searcher.Source.YOUTUBE -> "youtube"
+                else -> "music"
+            }).apply()
+            applyLibraryMode()
             buildChips()
-            if (lastQuery.isNotBlank()) search(lastQuery)
+            if (lastQuery.isNotBlank() && browsing == null) search(lastQuery)
         }
 
         buildChips()
@@ -207,6 +230,10 @@ class SearchFragment : Fragment(R.layout.fragment_search) {
         sortButton = view.findViewById<com.google.android.material.button.MaterialButton>(R.id.sortButton).also { b ->
             b.setOnClickListener { showOrderMenu(it) }
         }
+        makePlaylistButton = view.findViewById<View>(R.id.makePlaylist).also { b ->
+            b.setOnClickListener { makePlaylistFromResults() }
+        }
+        applyLibraryMode()
         browseScroll = view.findViewById(R.id.browseScroll)
         browseChips = view.findViewById(R.id.browseChips)
         sectionsScroll = view.findViewById(R.id.sectionsScroll)
@@ -253,6 +280,15 @@ class SearchFragment : Fragment(R.layout.fragment_search) {
     /** 結果の上のバー: 「「〇〇」の曲 · 58 件」と並び順ボタン */
     private fun updateResultBar() {
         val bar = resultBar ?: return
+        if (libraryMode) {
+            val n = libAdapter.items.size
+            bar.visibility = if (lastQuery.isNotBlank()) View.VISIBLE else View.GONE
+            resultInfo?.text = "ライブラリで「$lastQuery」 · $n 曲"
+            sortButton?.visibility = View.GONE
+            makePlaylistButton?.visibility = View.GONE
+            return
+        }
+        makePlaylistButton?.visibility = if (playlistCandidates().size >= 2) View.VISIBLE else View.GONE
         val hasResults = results.isNotEmpty() || top != null
         bar.visibility = if (hasResults && lastQuery.isNotBlank()) View.VISIBLE else View.GONE
         if (!hasResults) return
@@ -299,6 +335,80 @@ class SearchFragment : Fragment(R.layout.fragment_search) {
                 true
             }
         }.show()
+    }
+
+    private var sourceToggle: MaterialButtonToggleGroup? = null
+    private var makePlaylistButton: View? = null
+
+    /** 検索先の切り替え: ライブラリの時は曲の一覧(端末の曲の行)に、それ以外はいつもの検索結果に */
+    private fun applyLibraryMode() {
+        val list = resultsList ?: return
+        val want: RecyclerView.Adapter<*> = if (libraryMode) libAdapter else adapter
+        if (list.adapter !== want) list.adapter = want
+        view?.findViewById<View>(R.id.sectionsScroll)?.visibility = if (libraryMode) View.GONE else View.VISIBLE
+        if (libraryMode) libAdapter.submit(emptyList())
+        updateResultBar()
+    }
+
+    /** ライブラリから探す(曲名・アーティスト・アルバム。大文字小文字・全角半角・ひらがなカタカナの違いは気にしない) */
+    private fun searchLibrary(text: String) {
+        searchJob?.cancel(); moreJob?.cancel(); topJob?.cancel()
+        setBrowsing(null)
+        val words = libNorm(text).split(Regex("\\s+")).filter { it.isNotBlank() }
+        val hits = Repository.tracks.value.filter { t ->
+            val hay = libNorm("${t.title} ${t.artist} ${t.album}")
+            words.all { hay.contains(it) }
+        }.sortedWith(compareBy({ !libNorm(it.title).contains(words.firstOrNull().orEmpty()) }, { it.artist.lowercase() }, { it.title.lowercase() }))
+        libAdapter.submit(hits)
+        loading.visibility = View.INVISIBLE
+        idle.visibility = if (hits.isEmpty()) View.VISIBLE else View.GONE
+        if (hits.isEmpty()) hint.text = "ライブラリに「$text」に一致する曲はありませんでした"
+        updateResultBar()
+    }
+
+    private fun libNorm(s: String): String = java.text.Normalizer.normalize(s, java.text.Normalizer.Form.NFKC).lowercase()
+        .map { c -> if (c in 'ァ'..'ヶ') c - 0x60 else c }.joinToString("")
+
+    private fun libTrackMenu(anchor: View, t: Track) {
+        android.widget.PopupMenu(requireContext(), anchor).apply {
+            menu.add("次に再生").setOnMenuItemClickListener { main.player.playNext(t); true }
+            menu.add("キューに追加").setOnMenuItemClickListener { main.player.addToQueue(listOf(t)); true }
+            menu.add("この曲のラジオ").setOnMenuItemClickListener { Radio.forTrack(main, main.player, t); true }
+            menu.add("プレイリストに追加…").setOnMenuItemClickListener { main.actions.addToPlaylist(listOf(t.id)); true }
+        }.show()
+    }
+
+    /** プレイリストにできる曲: アーティストの人気曲(あれば)と、検索結果の曲・動画(重なりは 1 つに) */
+    private fun playlistCandidates(): List<Searcher.Result> =
+        (top?.songs.orEmpty() + results).filter { !it.isList && it.videoId != null }.distinctBy { it.videoId }
+
+    /** 今の検索結果(アーティストで探した時は、その人の人気曲が先頭)でプレイリストを作る。持っていない曲は ☁ オンラインの曲として入れる */
+    private fun makePlaylistFromResults() {
+        val songs = playlistCandidates()
+        if (songs.isEmpty()) return
+        val ctx = requireContext()
+        val day = java.text.SimpleDateFormat("M/d", java.util.Locale.JAPAN).format(java.util.Date())
+        val base = top?.artist?.takeIf { it.isNotBlank() } ?: lastQuery
+        val input = EditText(ctx).apply { setText("$base $day"); selectAll() }
+        val d = resources.displayMetrics.density
+        val box = android.widget.FrameLayout(ctx).apply {
+            setPadding((20 * d).toInt(), (8 * d).toInt(), (20 * d).toInt(), 0)
+            addView(input)
+        }
+        com.google.android.material.dialog.MaterialAlertDialogBuilder(ctx)
+            .setTitle("${songs.size} 曲でプレイリストを作る")
+            .setMessage(if (top != null) "「${top?.artist}」の人気曲を先頭に、検索結果の曲を続けます。ライブラリにない曲は ☁ オンラインの曲として入ります"
+                else "検索結果の曲をこの順で入れます。ライブラリにない曲は ☁ オンラインの曲として入ります")
+            .setView(box)
+            .setPositiveButton("作る") { _, _ ->
+                val name = input.text.toString().trim().ifBlank { "$base $day" }
+                val ids = songs.mapNotNull { r -> OnlineLibrary.add(r)?.id }.distinct()
+                if (ids.isEmpty()) { Toast.makeText(ctx, "プレイリストにできる曲がありませんでした", Toast.LENGTH_SHORT).show(); return@setPositiveButton }
+                Repository.createPlaylist(name, ids)
+                Toast.makeText(ctx, "プレイリスト「$name」を作りました(${ids.size} 曲)", Toast.LENGTH_LONG).show()
+            }
+            .setNegativeButton("キャンセル", null)
+            .show()
     }
 
     private fun refreshList() {
@@ -406,7 +516,7 @@ class SearchFragment : Fragment(R.layout.fragment_search) {
                 } else buildChips()
             }
         }
-        view?.findViewById<View>(R.id.sectionsScroll)?.visibility = View.VISIBLE
+        view?.findViewById<View>(R.id.sectionsScroll)?.visibility = if (libraryMode) View.GONE else View.VISIBLE
         updateResultBar()
     }
 
@@ -601,6 +711,8 @@ class SearchFragment : Fragment(R.layout.fragment_search) {
 
     /** ランキング・ムードのプレイリスト一覧を結果欄に出す(タップで頭から試聴、右のボタンでまとめて追加) */
     private fun showBrowse(title: String, load: () -> List<Searcher.Result>) {
+        // ランキングなどはネットの一覧なので、ライブラリを見ていたら YouTube Music に戻す
+        if (libraryMode) sourceToggle?.check(R.id.srcMusic)
         hideKeyboard()
         searchJob?.cancel(); moreJob?.cancel(); topJob?.cancel()
         top = null
@@ -753,6 +865,7 @@ class SearchFragment : Fragment(R.layout.fragment_search) {
         addHistory(text)
         hideSuggestions()
         hideKeyboard()
+        if (libraryMode) { searchLibrary(text); return }
         searchJob?.cancel()
         moreJob?.cancel()
         topJob?.cancel()

@@ -531,6 +531,34 @@
             app:show_buffering="when_playing"
             app:use_controller="true" />
 
+        <!-- 全画面で操作パネルが出ている間だけ: 再生ボタンの下に ♡ お気に入り / 👎 No Good -->
+        <LinearLayout
+            android:id="@+id/fsActions"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:layout_marginTop="120dp"
+            android:orientation="horizontal"
+            android:visibility="gone">
+
+            <ImageButton
+                android:id="@+id/fsLike"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_marginEnd="24dp"
+                android:background="@drawable/bg_fs_button"
+                android:contentDescription="お気に入りに追加"
+                android:src="@drawable/ic_favorite_border" />
+
+            <ImageButton
+                android:id="@+id/fsNoGood"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="@drawable/bg_fs_button"
+                android:contentDescription="No Good"
+                android:src="@drawable/ic_thumb_down_outline" />
+        </LinearLayout>
+
         <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"

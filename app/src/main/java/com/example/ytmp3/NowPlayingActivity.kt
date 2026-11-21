@@ -861,6 +861,24 @@ class NowPlayingActivity : AppCompatActivity(), Player.Listener {
                 if (on) androidx.appcompat.R.attr.colorPrimary else com.google.android.material.R.attr.colorOnSurfaceVariant))
             b.contentDescription = if (on) "No Good(押すと解除)" else "No Good(おすすめ・ラジオに出さない)"
         }
+        // 全画面の ♡ / 👎 も同じ状態に(動画の上なので白)
+        run {
+            val vid = Liked.vidOf(item)
+            val r = Liked.fromItem(item)
+            val ng = NoGood.isSong(vid) || (r != null && r.artist.isNotBlank() && NoGood.isArtist(Radio.mainArtist(r.artist)))
+            findViewById<android.widget.ImageButton>(R.id.fsNoGood)?.apply {
+                setImageResource(if (ng) R.drawable.ic_thumb_down else R.drawable.ic_thumb_down_outline)
+                setColorFilter(android.graphics.Color.WHITE)
+                contentDescription = if (ng) "No Good(押すと解除)" else "No Good(おすすめ・ラジオに出さない)"
+            }
+            findViewById<android.widget.ImageButton>(R.id.fsLike)?.apply {
+                val on = Liked.contains(vid)
+                setImageResource(if (on) R.drawable.ic_favorite else R.drawable.ic_favorite_border)
+                setColorFilter(android.graphics.Color.WHITE)
+                contentDescription = if (on) "お気に入りから外す" else "お気に入りに追加"
+            }
+            if (vid == null) findViewById<View>(R.id.fsActions)?.visibility = View.GONE
+        }
         findViewById<android.widget.ImageButton>(R.id.likeBtn).let { b ->
             val vid = Liked.vidOf(item)
             b.visibility = if (vid != null) View.VISIBLE else View.GONE
@@ -1135,6 +1153,14 @@ class NowPlayingActivity : AppCompatActivity(), Player.Listener {
         }
         findViewById<View>(R.id.npFullscreen).setOnClickListener { setFixed(true) }
         findViewById<View>(R.id.fsExit).setOnClickListener { setFixed(false) }
+        // 全画面: 操作パネル(再生ボタンなど)が出ている間だけ、その下に ♡ / 👎 を出す。押した時の動きは再生中画面のボタンと同じ
+        findViewById<View>(R.id.fsLike).setOnClickListener { findViewById<View>(R.id.likeBtn).performClick() }
+        findViewById<View>(R.id.fsNoGood).setOnClickListener { findViewById<View>(R.id.noGoodBtn).performClick() }
+        fsVideo.setControllerVisibilityListener(androidx.media3.ui.PlayerView.ControllerVisibilityListener { v ->
+            val item = controller?.currentMediaItem
+            findViewById<View>(R.id.fsActions).visibility =
+                if (v == View.VISIBLE && item != null && Liked.vidOf(item) != null) View.VISIBLE else View.GONE
+        })
         // 映像のタップはジャケットと同じ(一時停止 / 再生)
         npVideo.setOnClickListener { art.performClick() }
     }

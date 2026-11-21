@@ -68,7 +68,7 @@
             android:src="@drawable/ic_paste" />
     </LinearLayout>
 
-    <!-- YouTube Music / YouTube -->
+    <!-- YouTube Music / YouTube / ライブラリ -->
     <com.google.android.material.button.MaterialButtonToggleGroup
         android:id="@+id/source"
         android:layout_width="match_parent"
@@ -94,6 +94,14 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="YouTube" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/srcLibrary"
+            style="@style/Widget.Material3.Button.OutlinedButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="ライブラリ" />
     </com.google.android.material.button.MaterialButtonToggleGroup>
 
     <!-- 種類(曲・アーティスト… / 動画・チャンネル・プレイリスト) -->
@@ -167,6 +175,16 @@
             android:contentDescription="並び順を選ぶ"
             android:text="関連度"
             app:icon="@drawable/ic_sort" />
+
+        <!-- この検索結果(アーティストの人気曲と曲)でプレイリストを作る -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/makePlaylist"
+            style="@style/Widget.Material3.Button.IconButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:contentDescription="この結果でプレイリストを作る"
+            android:visibility="gone"
+            app:icon="@drawable/ic_playlist_add" />
     </LinearLayout>
 
     <com.google.android.material.progressindicator.LinearProgressIndicator
