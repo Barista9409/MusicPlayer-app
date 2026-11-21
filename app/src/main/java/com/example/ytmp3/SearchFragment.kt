@@ -42,11 +42,13 @@ class SearchFragment : Fragment(R.layout.fragment_search) {
     /** 検索先が「ライブラリ」の時(端末・☁ の曲から探す) */
     private var libraryMode = false
     private var resultsList: RecyclerView? = null
-    private val libAdapter by lazy {
-        TrackAdapter(
-            onClick = { pos -> main.player.play(libAdapter.items.toList(), pos) },
-            onMore = { v, pos -> libTrackMenu(v, libAdapter.items[pos]) },
+    private val libAdapter: TrackAdapter by lazy {
+        lateinit var a: TrackAdapter
+        a = TrackAdapter(
+            onClick = { pos -> main.player.play(a.items.toList(), pos) },
+            onMore = { v, pos -> libTrackMenu(v, a.items[pos]) },
         )
+        a
     }
     private val prefs by lazy { requireContext().getSharedPreferences("search", Context.MODE_PRIVATE) }
 
