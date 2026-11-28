@@ -71,8 +71,9 @@ data class Alarm(
             AlarmTarget.LIBRARY -> Repository.tracks.value
             AlarmTarget.PLAYLIST -> Repository.playlist(targetId)?.let { Repository.tracksOf(it) }.orEmpty()
             AlarmTarget.TRACK -> listOfNotNull(Repository.track(targetId))
-        }.filterNot { Repository.isMissing(it.id) }
-        // 曲やプレイリストが消えていたらライブラリ全体で代用
+        }.filter { Net.canPlayNow(it) }
+        // ☁ オンラインの曲も、今ネットから流せるなら入れる(端末にファイルが無い曲だけのプレイリストでも、選んだ曲が鳴るように)。
+        // 曲やプレイリストが消えていた時・オフラインで 1 曲も流せない時だけ、端末にある曲で代用
         return list.ifEmpty { Repository.tracks.value.filterNot { Repository.isMissing(it.id) }.shuffled() }
     }
 
